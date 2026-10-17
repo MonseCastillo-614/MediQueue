@@ -1,0 +1,25 @@
+{
+  "configuracion": {
+    "nombreSede": "SJ",
+    "cantidadSalas": 6,
+    "cantidadConsultorios": 7,
+    "cantidadEmergencias": 6,
+    "salaPreferencial": 6,
+    "consultorioPreferencial": 7,
+    "salaEmergenciaCritica": 6
+  },
+  "usuarios": {
+    "usuario": {
+      "nombreUsuario": "admin",
+      "contrasena": "prueba123",
+      "rol": "Administrador"
+    },
+    "siguiente": {
+      "usuario": {
+        "nombreUsuario": "enfermero1",
+        "contrasena": "en",
+        "rol": "Enfermero"
+      }
+    }
+  }
+}
