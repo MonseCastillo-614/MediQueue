@@ -132,7 +132,8 @@ public class ArchivoConfiguracion {
             JsonElement elemento = JsonParser.parseReader(lector);
 
             if (!elemento.isJsonObject()) {
-                System.out.println("El JSON no tiene un formato valido.");
+                System.out.println(
+                        "El JSON no tiene un formato valido.");
                 return;
             }
 
@@ -511,5 +512,27 @@ public class ArchivoConfiguracion {
                 || rol.equalsIgnoreCase("Recepcionista")
                 || rol.equalsIgnoreCase("Medico")
                 || rol.equalsIgnoreCase("Enfermero");
+    }
+
+    // Elimina la configuracion de la sede sin borrar los usuarios
+    public boolean eliminarConfiguracion() {
+
+        cargarDatosInternos();
+
+        if (datos == null || datos.configuracion == null) {
+            return false;
+        }
+
+        Configuracion configuracionAnterior = datos.configuracion;
+
+        datos.configuracion = null;
+
+        if (guardarDatos()) {
+            return true;
+        }
+
+        // Recupera la configuracion si falla el guardado
+        datos.configuracion = configuracionAnterior;
+        return false;
     }
 }
