@@ -2,8 +2,6 @@
 
 # UNIVERSIDAD FIDÉLITAS
 
-### Ingeniería en Sistemas de Computación
-
 **Curso: Estructura de Datos**
 
 # MEDIQUEUE
