@@ -1,0 +1,10 @@
+nombreSede=guana
+cantidadSalas=3
+cantidadConsultorios=1
+cantidadEmergencias=2
+salaPreferencial=1
+consultorioPreferencial=1
+salaEmergenciaCritica=1
+usuario1=admin|prueba123|Administrador
+usuario2=recepcion|recep123|Recepcionista
+usuario3=medico1|Medico|Medico
