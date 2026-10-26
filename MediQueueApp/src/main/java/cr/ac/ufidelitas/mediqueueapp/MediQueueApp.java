@@ -6,6 +6,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
 import javax.swing.JComboBox;
+import javax.swing.JTextField;
+import java.awt.GridLayout;
 import javax.swing.BoxLayout;
 import javax.swing.JPasswordField;
 /**
@@ -113,12 +115,12 @@ public class MediQueueApp {
             return null;
         }
 
-        JComboBox<String> salas = crearOpcionesCantidad();
-        JComboBox<String> consultorios = crearOpcionesCantidad();
-        JComboBox<String> emergencias = crearOpcionesCantidad();
+        JTextField salas = crearCampoCantidad("1");
+        JTextField consultorios = crearCampoCantidad("1");
+        JTextField emergencias = crearCampoCantidad("1");
 
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new GridLayout(0, 2, 12, 10));
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 14, 14, 14));
 
         panel.add(new JLabel("Cantidad de salas medicas:"));
         panel.add(salas);
@@ -128,7 +130,9 @@ public class MediQueueApp {
         panel.add(emergencias);
 
         int resultado = JOptionPane.showConfirmDialog(
-                null, panel, "Configuracion de la sede",
+                null,
+                panel,
+                "Configuracion de la sede",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -136,11 +140,20 @@ public class MediQueueApp {
             return null;
         }
 
-        Configuracion configuracion = new Configuracion(
-                nombreSede.trim(),
-                Integer.parseInt(salas.getSelectedItem().toString()),
-                Integer.parseInt(consultorios.getSelectedItem().toString()),
-                Integer.parseInt(emergencias.getSelectedItem().toString()));
+        Configuracion configuracion;
+
+        try {
+            configuracion = new Configuracion(
+                    nombreSede.trim(),
+                    leerCantidad(salas, "salas medicas"),
+                    leerCantidad(consultorios, "consultorios"),
+                    leerCantidad(emergencias, "salas de emergencia"));
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(
+                    null, ex.getMessage(), "Cantidad no valida",
+                    JOptionPane.WARNING_MESSAGE);
+            return configurarSede();
+        }
 
         if (!seleccionarEspaciosEspeciales(configuracion)) {
             return null;
@@ -149,16 +162,31 @@ public class MediQueueApp {
         return configuracion;
     }
 
-    // Crea opciones con cantidades del 1 al 10
-    public static JComboBox<String> crearOpcionesCantidad() {
+    // Crea un campo de texto para escribir cantidades directamente
+    public static JTextField crearCampoCantidad(String valorInicial) {
+        return new JTextField(valorInicial, 8);
+    }
 
-        JComboBox<String> opciones = new JComboBox<String>();
+    // Valida que la cantidad sea un numero entero mayor o igual a uno
+    private static int leerCantidad(
+            JTextField campo, String descripcion) {
 
-        for (int i = 1; i <= 10; i++) {
-            opciones.addItem(String.valueOf(i));
+        String texto = campo.getText().trim();
+
+        try {
+            int cantidad = Integer.parseInt(texto);
+
+            if (cantidad < 1) {
+                throw new NumberFormatException();
+            }
+
+            return cantidad;
+
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(
+                    "La cantidad de " + descripcion
+                    + " debe ser un numero entero mayor o igual a 1.");
         }
-
-        return opciones;
     }
 
     // Permite seleccionar los espacios especiales
@@ -198,7 +226,9 @@ public class MediQueueApp {
         panel.add(salaCritica);
 
         int resultado = JOptionPane.showConfirmDialog(
-                null, panel, "Asignacion de espacios especiales",
+                null,
+                panel,
+                "Asignacion de espacios especiales",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -207,14 +237,16 @@ public class MediQueueApp {
         }
 
         configuracion.setSalaPreferencial(
-                Integer.parseInt(salaPreferencial.getSelectedItem().toString()));
+                Integer.parseInt(
+                        salaPreferencial.getSelectedItem().toString()));
 
         configuracion.setConsultorioPreferencial(
                 Integer.parseInt(
                         consultorioPreferencial.getSelectedItem().toString()));
 
         configuracion.setSalaEmergenciaCritica(
-                Integer.parseInt(salaCritica.getSelectedItem().toString()));
+                Integer.parseInt(
+                        salaCritica.getSelectedItem().toString()));
 
         return true;
     }
@@ -276,45 +308,165 @@ public class MediQueueApp {
 
         while (continuar) {
 
-            String opcion = JOptionPane.showInputDialog(
-                    null,
-                    "MENU DE ADMINISTRACION\n\n"
-                    + "1. Registrar usuario\n"
-                    + "2. Consultar usuarios\n"
-                    + "3. Editar usuario\n"
-                    + "4. Eliminar usuario\n"
-                    + "5. Modificar configuracion de la sede\n"
-                    + "6. Eliminar configuracion de la sede\n"
-                    + "7. Cerrar sesion\n\n"
-                    + "Seleccione una opcion:");
+            String opcion = solicitarOpcionMenuAdministrador();
 
             if (opcion == null || opcion.equals("7")) {
+
                 continuar = false;
 
             } else if (opcion.equals("1")) {
+
                 registrarUsuario(archivo);
 
             } else if (opcion.equals("2")) {
+
                 JOptionPane.showMessageDialog(
                         null, archivo.consultarUsuarios());
 
             } else if (opcion.equals("3")) {
+
                 editarUsuario(archivo);
 
             } else if (opcion.equals("4")) {
+
                 eliminarUsuario(archivo, usuarioActual);
 
             } else if (opcion.equals("5")) {
+
                 modificarConfiguracion(archivo);
 
             } else if (opcion.equals("6")) {
+
                 restablecerConfiguracion(archivo);
 
+            } else if (opcion.equals("8")) {
+
+                int confirmacion = JOptionPane.showConfirmDialog(
+                        null,
+                        "Se reiniciara el sistema.\n\n"
+                        + "Se eliminara la configuracion de la sede,\n"
+                        + "los usuarios registrados y los tiquetes.\n\n"
+                        + "Se conservara el administrador inicial:\n"
+                        + "Usuario: admin\n"
+                        + "Contrasena: prueba123\n\n"
+                        + "Esta accion no se puede deshacer.\n"
+                        + "¿Desea continuar?",
+                        "Confirmar reinicio",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+
+                if (confirmacion == JOptionPane.YES_OPTION) {
+
+                    if (archivo.reiniciarSistema()) {
+
+                        JOptionPane.showMessageDialog(
+                                null,
+                                "El sistema se reinicio correctamente.\n"
+                                + "La aplicacion se cerrara para comenzar "
+                                + "desde cero.");
+
+                        System.exit(0);
+
+                    } else {
+
+                        JOptionPane.showMessageDialog(
+                                null,
+                                "No se pudo completar el reinicio.\n"
+                                + "Revise los mensajes de la consola.");
+                    }
+                }
+
             } else {
+
                 JOptionPane.showMessageDialog(
-                        null, "Seleccione una opcion valida.");
+                        null,
+                        "Seleccione una opcion valida.");
             }
         }
+    }
+
+    // Muestra el menu de administracion con alineacion uniforme
+    private static String solicitarOpcionMenuAdministrador() {
+        JPanel panel = new JPanel(new java.awt.BorderLayout(0, 12));
+        panel.setBorder(
+                javax.swing.BorderFactory.createEmptyBorder(16, 20, 16, 20));
+
+        JPanel encabezado = new JPanel();
+        encabezado.setLayout(new BoxLayout(encabezado, BoxLayout.Y_AXIS));
+
+        JLabel lineaSuperior = new JLabel("================================");
+        lineaSuperior.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+
+        JLabel titulo = new JLabel("MEDIQUEUE");
+        titulo.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        titulo.setFont(titulo.getFont().deriveFont(java.awt.Font.BOLD, 16f));
+
+        JLabel subtitulo = new JLabel("SISTEMA DE GESTION HOSPITALARIA");
+        subtitulo.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        subtitulo.setFont(subtitulo.getFont().deriveFont(java.awt.Font.BOLD, 12f));
+
+        JLabel lineaInferior = new JLabel("================================");
+        lineaInferior.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+
+        encabezado.add(lineaSuperior);
+        encabezado.add(javax.swing.Box.createVerticalStrut(5));
+        encabezado.add(titulo);
+        encabezado.add(subtitulo);
+        encabezado.add(javax.swing.Box.createVerticalStrut(5));
+        encabezado.add(lineaInferior);
+
+        JPanel opciones = new JPanel();
+        opciones.setLayout(new BoxLayout(opciones, BoxLayout.Y_AXIS));
+
+        agregarOpcionMenu(opciones, "GESTION DE USUARIOS", true);
+        agregarOpcionMenu(opciones, "1. Registrar usuario", false);
+        agregarOpcionMenu(opciones, "2. Consultar usuarios", false);
+        agregarOpcionMenu(opciones, "3. Editar usuario", false);
+        agregarOpcionMenu(opciones, "4. Eliminar usuario", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
+
+        agregarOpcionMenu(opciones, "CONFIGURACION DE LA SEDE", true);
+        agregarOpcionMenu(opciones, "5. Modificar configuracion", false);
+        agregarOpcionMenu(opciones, "6. Eliminar configuracion", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
+
+        agregarOpcionMenu(opciones, "SISTEMA", true);
+        agregarOpcionMenu(opciones, "7. Cerrar sesion", false);
+        agregarOpcionMenu(opciones, "8. Reiniciar sistema", false);
+
+        JPanel inferior = new JPanel(new java.awt.BorderLayout(0, 5));
+        inferior.add(new JLabel("Seleccione una opcion:"),
+                java.awt.BorderLayout.NORTH);
+        JTextField campoOpcion = new JTextField(18);
+        inferior.add(campoOpcion, java.awt.BorderLayout.CENTER);
+
+        panel.add(encabezado, java.awt.BorderLayout.NORTH);
+        panel.add(opciones, java.awt.BorderLayout.CENTER);
+        panel.add(inferior, java.awt.BorderLayout.SOUTH);
+
+        int resultado = JOptionPane.showConfirmDialog(
+                null, panel, "MEDIQUEUE - Administracion",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (resultado != JOptionPane.OK_OPTION) {
+            return null;
+        }
+
+        return campoOpcion.getText().trim();
+    }
+
+    private static void agregarOpcionMenu(
+            JPanel panel, String texto, boolean encabezado) {
+
+        JLabel etiqueta = new JLabel(texto);
+        etiqueta.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
+
+        if (encabezado) {
+            etiqueta.setFont(
+                    etiqueta.getFont().deriveFont(java.awt.Font.BOLD));
+        }
+
+        panel.add(etiqueta);
     }
 
     // Permite escoger que parte de la configuracion modificar
@@ -344,18 +496,23 @@ public class MediQueueApp {
                     + "Seleccione una opcion:");
 
             if (opcion == null || opcion.equals("4")) {
+
                 continuar = false;
 
             } else if (opcion.equals("1")) {
+
                 modificarNombreSede(archivo);
 
             } else if (opcion.equals("2")) {
+
                 modificarCantidades(archivo);
 
             } else if (opcion.equals("3")) {
+
                 modificarEspaciosEspeciales(archivo);
 
             } else {
+
                 JOptionPane.showMessageDialog(
                         null, "Seleccione una opcion valida.");
             }
@@ -390,10 +547,14 @@ public class MediQueueApp {
         actual.setNombreSede(nombre.trim());
 
         if (archivo.guardarConfiguracion(actual)) {
+
             JOptionPane.showMessageDialog(
                     null, "Nombre de la sede actualizado correctamente.");
+
             mostrarConfiguracion(actual);
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudo guardar el cambio.");
         }
@@ -409,18 +570,15 @@ public class MediQueueApp {
             return;
         }
 
-        JComboBox<String> salas = crearOpcionesCantidad();
-        JComboBox<String> consultorios = crearOpcionesCantidad();
-        JComboBox<String> emergencias = crearOpcionesCantidad();
-
-        salas.setSelectedItem(String.valueOf(actual.getCantidadSalas()));
-        consultorios.setSelectedItem(
+        JTextField salas = crearCampoCantidad(
+                String.valueOf(actual.getCantidadSalas()));
+        JTextField consultorios = crearCampoCantidad(
                 String.valueOf(actual.getCantidadConsultorios()));
-        emergencias.setSelectedItem(
+        JTextField emergencias = crearCampoCantidad(
                 String.valueOf(actual.getCantidadEmergencias()));
 
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JPanel panel = new JPanel(new GridLayout(0, 2, 12, 10));
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 14, 14, 14));
 
         panel.add(new JLabel("Cantidad de salas medicas:"));
         panel.add(salas);
@@ -430,7 +588,9 @@ public class MediQueueApp {
         panel.add(emergencias);
 
         int resultado = JOptionPane.showConfirmDialog(
-                null, panel, "Modificar cantidades",
+                null,
+                panel,
+                "Modificar cantidades",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -443,11 +603,21 @@ public class MediQueueApp {
         int consultoriosAnteriores = actual.getCantidadConsultorios();
         int emergenciasAnteriores = actual.getCantidadEmergencias();
 
-        int nuevasSalas = Integer.parseInt(salas.getSelectedItem().toString());
-        int nuevosConsultorios = Integer.parseInt(
-                consultorios.getSelectedItem().toString());
-        int nuevasEmergencias = Integer.parseInt(
-                emergencias.getSelectedItem().toString());
+        int nuevasSalas;
+        int nuevosConsultorios;
+        int nuevasEmergencias;
+
+        try {
+            nuevasSalas = leerCantidad(salas, "salas medicas");
+            nuevosConsultorios = leerCantidad(consultorios, "consultorios");
+            nuevasEmergencias = leerCantidad(
+                    emergencias, "salas de emergencia");
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(
+                    null, ex.getMessage(), "Cantidad no valida",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
 
         actual.setCantidadSalas(nuevasSalas);
         actual.setCantidadConsultorios(nuevosConsultorios);
@@ -459,14 +629,19 @@ public class MediQueueApp {
             actual.setCantidadSalas(salasAnteriores);
             actual.setCantidadConsultorios(consultoriosAnteriores);
             actual.setCantidadEmergencias(emergenciasAnteriores);
+
             return;
         }
 
         if (archivo.guardarConfiguracion(actual)) {
+
             JOptionPane.showMessageDialog(
                     null, "Cantidades actualizadas correctamente.");
+
             mostrarConfiguracion(actual);
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudieron guardar las cantidades.");
         }
@@ -487,10 +662,14 @@ public class MediQueueApp {
         }
 
         if (archivo.guardarConfiguracion(actual)) {
+
             JOptionPane.showMessageDialog(
                     null, "Espacios especiales actualizados correctamente.");
+
             mostrarConfiguracion(actual);
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudieron guardar los cambios.");
         }
@@ -515,13 +694,16 @@ public class MediQueueApp {
         }
 
         if (archivo.eliminarConfiguracion()) {
+
             JOptionPane.showMessageDialog(
                     null,
                     "Configuracion eliminada correctamente.\n"
                     + "Los usuarios se conservaron.\n"
                     + "La sede se podra configurar nuevamente "
                     + "al iniciar el sistema.");
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudo eliminar la configuracion.");
         }
@@ -541,7 +723,9 @@ public class MediQueueApp {
         JPasswordField campoContrasena = new JPasswordField();
 
         int resultado = JOptionPane.showConfirmDialog(
-                null, campoContrasena, "Ingrese la contraseña",
+                null,
+                campoContrasena,
+                "Ingrese la contraseña",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -549,11 +733,15 @@ public class MediQueueApp {
             return;
         }
 
-        String contrasena = new String(campoContrasena.getPassword());
+        String contrasena = new String(
+                campoContrasena.getPassword());
+
         JComboBox<String> roles = crearOpcionesRoles();
 
         int seleccion = JOptionPane.showConfirmDialog(
-                null, roles, "Seleccione el rol",
+                null,
+                roles,
+                "Seleccione el rol",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -565,9 +753,12 @@ public class MediQueueApp {
 
         if (archivo.agregarUsuario(
                 nombreUsuario.trim(), contrasena, rol)) {
+
             JOptionPane.showMessageDialog(
                     null, "Usuario registrado correctamente.");
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudo registrar el usuario.");
         }
@@ -610,7 +801,9 @@ public class MediQueueApp {
         JPasswordField campoContrasena = new JPasswordField();
 
         int resultado = JOptionPane.showConfirmDialog(
-                null, campoContrasena, "Ingrese la nueva contraseña",
+                null,
+                campoContrasena,
+                "Ingrese la nueva contraseña",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -624,7 +817,9 @@ public class MediQueueApp {
         JComboBox<String> roles = crearOpcionesRoles();
 
         int seleccion = JOptionPane.showConfirmDialog(
-                null, roles, "Seleccione el nuevo rol",
+                null,
+                roles,
+                "Seleccione el nuevo rol",
                 JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
 
@@ -639,9 +834,12 @@ public class MediQueueApp {
                 nombreNuevo.trim(),
                 contrasenaNueva,
                 rolNuevo)) {
+
             JOptionPane.showMessageDialog(
                     null, "Usuario actualizado correctamente.");
+
         } else {
+
             JOptionPane.showMessageDialog(
                     null, "No se pudo actualizar el usuario.");
         }
@@ -671,9 +869,12 @@ public class MediQueueApp {
 
             if (archivo.eliminarUsuario(
                     nombreUsuario.trim(), usuarioActual)) {
+
                 JOptionPane.showMessageDialog(
                         null, "Usuario eliminado correctamente.");
+
             } else {
+
                 JOptionPane.showMessageDialog(
                         null, "No se pudo eliminar el usuario.");
             }

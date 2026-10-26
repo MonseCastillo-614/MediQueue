@@ -1,4 +1,4 @@
-package cr.ac.ufidelitas.mediqueueapp.persistencia;
+package cr.ac.ufidelitas.mediqueueapp;
 
 /**
  * Permite convertir objetos del proyecto a JSON

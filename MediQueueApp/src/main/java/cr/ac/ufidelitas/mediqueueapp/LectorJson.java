@@ -1,6 +1,4 @@
-
-package cr.ac.ufidelitas.mediqueueapp.persistencia;
-
+package cr.ac.ufidelitas.mediqueueapp;
 
 public class LectorJson {
 
@@ -8,6 +6,12 @@ public class LectorJson {
     private int posicion;
 
     public LectorJson(String texto) {
+        if (texto == null) {
+            throw new IllegalArgumentException(
+                "El texto JSON no puede ser null."
+            );
+        }
+
         this.texto = texto;
     }
 
@@ -31,8 +35,13 @@ public class LectorJson {
 
         char c = texto.charAt(posicion);
 
-        if (c == '{') return objeto();
-        if (c == '[') return arreglo();
+        if (c == '{') {
+            return objeto();
+        }
+
+        if (c == '[') {
+            return arreglo();
+        }
 
         if (c == '"') {
             return new JsonValor(
@@ -80,6 +89,11 @@ public class LectorJson {
 
         while (true) {
             espacios();
+
+            if (posicion >= texto.length()
+                    || texto.charAt(posicion) != '"') {
+                throw error("Se esperaba el nombre de un campo");
+            }
 
             String nombre = cadena();
 
@@ -157,27 +171,35 @@ public class LectorJson {
                 case '"':
                     salida.append('"');
                     break;
+
                 case '\\':
                     salida.append('\\');
                     break;
+
                 case '/':
                     salida.append('/');
                     break;
+
                 case 'b':
                     salida.append('\b');
                     break;
+
                 case 'f':
                     salida.append('\f');
                     break;
+
                 case 'n':
                     salida.append('\n');
                     break;
+
                 case 'r':
                     salida.append('\r');
                     break;
+
                 case 't':
                     salida.append('\t');
                     break;
+
                 case 'u':
                     if (posicion + 4 > texto.length()) {
                         throw error("Unicode incompleto");
@@ -213,8 +235,7 @@ public class LectorJson {
 
         if (consumirSi('0')) {
             if (posicion < texto.length()
-                    && Character.isDigit(
-                        texto.charAt(posicion))) {
+                    && esDigitoAscii(texto.charAt(posicion))) {
                 throw error("Numero con cero inicial");
             }
         } else {
@@ -229,6 +250,7 @@ public class LectorJson {
             if (!consumirSi('+')) {
                 consumirSi('-');
             }
+
             digitos();
         }
 
@@ -242,14 +264,17 @@ public class LectorJson {
         int inicio = posicion;
 
         while (posicion < texto.length()
-                && Character.isDigit(
-                    texto.charAt(posicion))) {
+                && esDigitoAscii(texto.charAt(posicion))) {
             posicion++;
         }
 
         if (inicio == posicion) {
             throw error("Se esperaba un digito");
         }
+    }
+
+    private boolean esDigitoAscii(char c) {
+        return c >= '0' && c <= '9';
     }
 
     private boolean coincide(String literal) {
@@ -286,9 +311,7 @@ public class LectorJson {
 
     private void consumir(char requerido) {
         if (!consumirSi(requerido)) {
-            throw error(
-                "Se esperaba: " + requerido
-            );
+            throw error("Se esperaba: " + requerido);
         }
     }
 

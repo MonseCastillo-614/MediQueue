@@ -1,5 +1,4 @@
-
-package cr.ac.ufidelitas.mediqueueapp.persistencia;
+package cr.ac.ufidelitas.mediqueueapp;
 
 public class EscritorJson {
 

@@ -1,6 +1,4 @@
-
-package cr.ac.ufidelitas.mediqueueapp.persistencia;
-
+package cr.ac.ufidelitas.mediqueueapp;
 
 public class JsonValor {
 
@@ -24,8 +22,13 @@ public class JsonValor {
         this.valor = valor;
     }
 
-    
     public void agregarHijo(String nombre, JsonValor hijo) {
+        if (hijo == null) {
+            throw new IllegalArgumentException(
+                "El hijo JSON no puede ser null."
+            );
+        }
+
         hijo.clave = nombre;
 
         if (primerHijo == null) {
@@ -37,11 +40,16 @@ public class JsonValor {
         ultimoHijo = hijo;
     }
 
-    
     public JsonValor campo(String nombre) {
         if (tipo != OBJETO) {
             throw new IllegalArgumentException(
                 "Se esperaba objeto JSON."
+            );
+        }
+
+        if (nombre == null) {
+            throw new IllegalArgumentException(
+                "El nombre del campo no puede ser null."
             );
         }
 
@@ -51,6 +59,7 @@ public class JsonValor {
             if (nombre.equals(actual.clave)) {
                 return actual;
             }
+
             actual = actual.siguiente;
         }
 
@@ -65,6 +74,7 @@ public class JsonValor {
                 "Se esperaba texto JSON."
             );
         }
+
         return valor;
     }
 
@@ -74,6 +84,7 @@ public class JsonValor {
                 "Se esperaba numero JSON."
             );
         }
+
         return Integer.parseInt(valor);
     }
 

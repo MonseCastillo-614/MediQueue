@@ -1,17 +1,15 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ */
 package cr.ac.ufidelitas.mediqueueapp;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Reader;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
@@ -23,8 +21,10 @@ import java.nio.file.Paths;
  */
 public class ArchivoConfiguracion {
 
-    private final Path rutaArchivo;
     private final Gson gson;
+    private final PersistenciaDatos persistencia;
+    private final AdaptadorJson<DatosGuardados> adaptadorDatos;
+
     private DatosGuardados datos;
 
     // Nodo para guardar los usuarios mediante una estructura enlazada
@@ -51,16 +51,60 @@ public class ArchivoConfiguracion {
         }
     }
 
-    // Prepara el archivo y el convertidor JSON
+    // Prepara la persistencia y el convertidor JSON
     public ArchivoConfiguracion() {
-        rutaArchivo = Paths.get("config.json");
-        gson = new GsonBuilder().setPrettyPrinting().create();
+
+        gson = new GsonBuilder()
+                .setPrettyPrinting()
+                .create();
+
+        persistencia = new PersistenciaDatos(Paths.get("."));
+
+        adaptadorDatos = new AdaptadorJson<DatosGuardados>() {
+
+            @Override
+            public String convertirAJson(DatosGuardados datos) {
+                return gson.toJson(datos);
+            }
+
+            @Override
+            public DatosGuardados convertirDesdeJson(String json) {
+
+                JsonElement elemento = new JsonParser().parse(json);
+
+                if (!elemento.isJsonObject()) {
+                    throw new IllegalArgumentException(
+                            "El JSON no tiene un formato valido.");
+                }
+
+                JsonObject objeto = elemento.getAsJsonObject();
+
+                if (objeto.has("configuracion")
+                        || objeto.has("usuarios")) {
+
+                    return gson.fromJson(
+                            objeto,
+                            DatosGuardados.class);
+
+                } else {
+
+                    // Admite el formato anterior de config.json
+                    Configuracion configuracion =
+                            gson.fromJson(
+                                    objeto,
+                                    Configuracion.class);
+
+                    return new DatosGuardados(configuracion);
+                }
+            }
+        };
+
         datos = null;
     }
 
-    // Comprueba si existe el archivo
+    // Comprueba si existe el archivo de configuracion
     public boolean existeArchivo() {
-        return Files.exists(rutaArchivo);
+        return Files.exists(Paths.get("config.json"));
     }
 
     // Guarda la configuracion y los usuarios
@@ -70,17 +114,21 @@ public class ArchivoConfiguracion {
             return false;
         }
 
-        try (FileWriter escritor =
-                new FileWriter(rutaArchivo.toFile())) {
+        try {
 
-            gson.toJson(datos, escritor);
+            persistencia.guardarConfiguracion(
+                    datos,
+                    adaptadorDatos);
+
             System.out.println("Datos guardados en config.json.");
+
             return true;
 
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
 
             System.out.println(
                     "Error al guardar: " + e.getMessage());
+
             return false;
         }
     }
@@ -115,47 +163,20 @@ public class ArchivoConfiguracion {
         return datos.configuracion;
     }
 
-    // Carga los datos y admite el formato anterior de config.json
+    // Carga los datos desde PersistenciaDatos
     private void cargarDatosInternos() {
 
         if (datos != null) {
             return;
         }
 
-        if (!existeArchivo()) {
-            return;
-        }
+        try {
 
-        try (Reader lector =
-                new FileReader(rutaArchivo.toFile())) {
-
-            JsonElement elemento = JsonParser.parseReader(lector);
-
-            if (!elemento.isJsonObject()) {
-                System.out.println(
-                        "El JSON no tiene un formato valido.");
-                return;
-            }
-
-            JsonObject objeto = elemento.getAsJsonObject();
-
-            if (objeto.has("configuracion")) {
-
-                // Carga el formato que contiene configuracion y usuarios
-                datos = gson.fromJson(objeto, DatosGuardados.class);
-
-            } else {
-
-                // Recupera la configuracion guardada con el formato anterior
-                Configuracion configuracion =
-                        gson.fromJson(objeto, Configuracion.class);
-
-                datos = new DatosGuardados(configuracion);
-            }
+            datos = persistencia.cargarConfiguracion(
+                    adaptadorDatos);
 
             if (datos != null && datos.usuarios == null) {
 
-                // Crea una cuenta inicial si aun no hay usuarios
                 datos.usuarios = new NodoUsuario(
                         new Usuario(
                                 "admin",
@@ -170,7 +191,8 @@ public class ArchivoConfiguracion {
             datos = null;
 
             System.out.println(
-                    "Error al cargar config.json: " + e.getMessage());
+                    "Error al cargar config.json: "
+                    + e.getMessage());
         }
     }
 
@@ -178,16 +200,27 @@ public class ArchivoConfiguracion {
     public Usuario validarUsuario(
             String nombreUsuario, String contrasena) {
 
+        if (nombreUsuario == null
+                || contrasena == null
+                || nombreUsuario.trim().isEmpty()
+                || contrasena.isEmpty()) {
+
+            return null;
+        }
+
         cargarDatosInternos();
 
         NodoUsuario actual = obtenerPrimerUsuario();
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(nombreUsuario)
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getContrasena() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(nombreUsuario.trim())
                     && actual.usuario.getContrasena()
-                    .equals(contrasena)) {
+                            .equals(contrasena)) {
 
                 return actual.usuario;
             }
@@ -211,14 +244,22 @@ public class ArchivoConfiguracion {
     // Comprueba si ya existe un nombre de usuario
     public boolean existeUsuario(String nombreUsuario) {
 
+        if (nombreUsuario == null
+                || nombreUsuario.trim().isEmpty()) {
+            return false;
+        }
+
         cargarDatosInternos();
 
         NodoUsuario actual = obtenerPrimerUsuario();
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(nombreUsuario)) {
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(nombreUsuario.trim())) {
+
                 return true;
             }
 
@@ -245,11 +286,14 @@ public class ArchivoConfiguracion {
 
             System.out.println(
                     "No se pudo registrar el usuario. Revise los datos.");
+
             return false;
         }
 
         Usuario nuevoUsuario = new Usuario(
-                nombreUsuario.trim(), contrasena, rol);
+                nombreUsuario.trim(),
+                contrasena,
+                rol.trim());
 
         NodoUsuario nuevo = new NodoUsuario(nuevoUsuario);
 
@@ -272,8 +316,8 @@ public class ArchivoConfiguracion {
             return true;
         }
 
-        // Revierte el registro si no se pudo guardar
         eliminarNodo(nombreUsuario.trim());
+
         return false;
     }
 
@@ -286,21 +330,25 @@ public class ArchivoConfiguracion {
             return "No hay usuarios registrados.";
         }
 
-        String resultado = "USUARIOS REGISTRADOS\n\n";
+        StringBuilder resultado =
+                new StringBuilder("USUARIOS REGISTRADOS\n\n");
+
         NodoUsuario actual = datos.usuarios;
 
         while (actual != null) {
 
-            resultado += "Usuario: "
-                    + actual.usuario.getNombreUsuario()
-                    + "\nRol: "
-                    + actual.usuario.getRol()
-                    + "\n\n";
+            if (actual.usuario != null) {
+                resultado.append("Usuario: ")
+                        .append(actual.usuario.getNombreUsuario())
+                        .append("\nRol: ")
+                        .append(actual.usuario.getRol())
+                        .append("\n\n");
+            }
 
             actual = actual.siguiente;
         }
 
-        return resultado;
+        return resultado.toString();
     }
 
     // Modifica los datos de un usuario existente
@@ -320,6 +368,7 @@ public class ArchivoConfiguracion {
                 || nombreNuevo.trim().isEmpty()
                 || contrasenaNueva.isEmpty()
                 || !rolValido(rolNuevo)) {
+
             return false;
         }
 
@@ -328,8 +377,11 @@ public class ArchivoConfiguracion {
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(usuarioAnterior.trim())) {
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(usuarioAnterior.trim())) {
+
                 encontrado = actual.usuario;
                 break;
             }
@@ -350,12 +402,14 @@ public class ArchivoConfiguracion {
             return false;
         }
 
-        if (encontrado.getRol().equalsIgnoreCase("Administrador")
-                && !rolNuevo.equalsIgnoreCase("Administrador")
+        if (encontrado.getRol() != null
+                && encontrado.getRol().equalsIgnoreCase("Administrador")
+                && !rolNuevo.trim().equalsIgnoreCase("Administrador")
                 && contarAdministradores() <= 1) {
 
             System.out.println(
                     "No se puede quitar el ultimo administrador.");
+
             return false;
         }
 
@@ -365,13 +419,12 @@ public class ArchivoConfiguracion {
 
         encontrado.setNombreUsuario(nombreNuevo.trim());
         encontrado.setContrasena(contrasenaNueva);
-        encontrado.setRol(rolNuevo);
+        encontrado.setRol(rolNuevo.trim());
 
         if (guardarDatos()) {
             return true;
         }
 
-        // Restaura los datos si falla el guardado
         encontrado.setNombreUsuario(nombreOriginal);
         encontrado.setContrasena(contrasenaOriginal);
         encontrado.setRol(rolOriginal);
@@ -388,12 +441,15 @@ public class ArchivoConfiguracion {
         if (datos == null
                 || nombreUsuario == null
                 || usuarioActual == null) {
+
             return false;
         }
 
-        if (nombreUsuario.trim().equalsIgnoreCase(usuarioActual)) {
+        if (nombreUsuario.trim().equalsIgnoreCase(usuarioActual.trim())) {
+
             System.out.println(
                     "No puede eliminar su propia cuenta.");
+
             return false;
         }
 
@@ -401,15 +457,19 @@ public class ArchivoConfiguracion {
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(nombreUsuario.trim())) {
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(nombreUsuario.trim())) {
 
-                if (actual.usuario.getRol()
-                        .equalsIgnoreCase("Administrador")
+                if (actual.usuario.getRol() != null
+                        && actual.usuario.getRol()
+                                .equalsIgnoreCase("Administrador")
                         && contarAdministradores() <= 1) {
 
                     System.out.println(
                             "No se puede eliminar el ultimo administrador.");
+
                     return false;
                 }
 
@@ -429,8 +489,10 @@ public class ArchivoConfiguracion {
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(nombreUsuario.trim())) {
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(nombreUsuario.trim())) {
 
                 if (anterior == null) {
                     datos.usuarios = actual.siguiente;
@@ -442,7 +504,7 @@ public class ArchivoConfiguracion {
                     return true;
                 }
 
-                // Si falla el guardado, vuelve a enlazar el nodo
+                // Restaura el nodo si no se pudo guardar
                 if (anterior == null) {
                     actual.siguiente = datos.usuarios;
                     datos.usuarios = actual;
@@ -464,13 +526,19 @@ public class ArchivoConfiguracion {
     // Elimina un nodo por nombre de usuario
     private void eliminarNodo(String nombreUsuario) {
 
+        if (datos == null || nombreUsuario == null) {
+            return;
+        }
+
         NodoUsuario anterior = null;
         NodoUsuario actual = datos.usuarios;
 
         while (actual != null) {
 
-            if (actual.usuario.getNombreUsuario()
-                    .equalsIgnoreCase(nombreUsuario)) {
+            if (actual.usuario != null
+                    && actual.usuario.getNombreUsuario() != null
+                    && actual.usuario.getNombreUsuario()
+                            .equalsIgnoreCase(nombreUsuario)) {
 
                 if (anterior == null) {
                     datos.usuarios = actual.siguiente;
@@ -494,8 +562,11 @@ public class ArchivoConfiguracion {
 
         while (actual != null) {
 
-            if (actual.usuario.getRol()
-                    .equalsIgnoreCase("Administrador")) {
+            if (actual.usuario != null
+                    && actual.usuario.getRol() != null
+                    && actual.usuario.getRol()
+                            .equalsIgnoreCase("Administrador")) {
+
                 cantidad++;
             }
 
@@ -507,6 +578,10 @@ public class ArchivoConfiguracion {
 
     // Comprueba que el rol sea uno de los permitidos
     private boolean rolValido(String rol) {
+
+        if (rol == null) {
+            return false;
+        }
 
         return rol.equalsIgnoreCase("Administrador")
                 || rol.equalsIgnoreCase("Recepcionista")
@@ -531,8 +606,46 @@ public class ArchivoConfiguracion {
             return true;
         }
 
-        // Recupera la configuracion si falla el guardado
         datos.configuracion = configuracionAnterior;
+
         return false;
+    }
+
+    // Reinicia el sistema y conserva la cuenta administradora inicial
+    public boolean reiniciarSistema() {
+
+        cargarDatosInternos();
+
+        DatosGuardados datosAnteriores = datos;
+
+        datos = new DatosGuardados(null);
+
+        datos.usuarios = new NodoUsuario(
+                new Usuario(
+                        "admin",
+                        "prueba123",
+                        "Administrador"));
+
+        if (!guardarDatos()) {
+            datos = datosAnteriores;
+            return false;
+        }
+
+        try {
+
+            Files.deleteIfExists(Paths.get("tiquetes.json"));
+
+            System.out.println("Sistema reiniciado correctamente.");
+
+            return true;
+
+        } catch (IOException e) {
+
+            System.out.println(
+                    "No se pudieron eliminar los tiquetes: "
+                    + e.getMessage());
+
+            return false;
+        }
     }
 }
