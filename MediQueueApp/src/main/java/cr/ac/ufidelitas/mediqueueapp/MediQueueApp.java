@@ -2,6 +2,8 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  */
 package cr.ac.ufidelitas.mediqueueapp;
+import java.io.IOException;
+import java.nio.file.Paths;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
@@ -16,14 +18,56 @@ import javax.swing.JPasswordField;
  */
 public class MediQueueApp {
 
+    // Registros guardados en listas enlazadas.
+    private static Paciente primerPaciente;
+    private static Paciente ultimoPaciente;
+    private static Tiquete primerTiquete;
+    private static Tiquete ultimoTiquete;
+
+    private static final PersistenciaDatos persistenciaDatos =
+            new PersistenciaDatos(Paths.get("."));
+
+    // Adaptador para guardar y recuperar pacientes.
+    private static final AdaptadorJson<Paciente> ADAPTADOR_PACIENTES =
+            new AdaptadorJson<Paciente>() {
+        @Override
+        public String convertirAJson(Paciente datos) {
+            return pacientesAJson(datos);
+        }
+
+        @Override
+        public Paciente convertirDesdeJson(String json) {
+            return pacientesDesdeJson(json);
+        }
+    };
+
+    // Adaptador para guardar y recuperar tiquetes.
+    private static final AdaptadorJson<Tiquete> ADAPTADOR_TIQUETES =
+            new AdaptadorJson<Tiquete>() {
+        @Override
+        public String convertirAJson(Tiquete datos) {
+            return tiquetesAJson(datos);
+        }
+
+        @Override
+        public Tiquete convertirDesdeJson(String json) {
+            return tiquetesDesdeJson(json);
+        }
+    };
+
     public static void main(String[] args) {
 
         ArchivoConfiguracion archivo = new ArchivoConfiguracion();
 
-        // Recupera la configuracion guardada
+        // Carga los datos guardados.
+        if (!cargarDatosPersistentes()) {
+            return;
+        }
+
+        // Carga la configuracion.
         Configuracion configuracion = archivo.cargarConfiguracion();
 
-        // Si no existe una configuracion, solicita una nueva
+        // Si no hay configuracion, la pide al usuario.
         if (configuracion == null) {
 
             configuracion = configurarSede();
@@ -40,7 +84,7 @@ public class MediQueueApp {
             }
         }
 
-        // Solicita el inicio de sesion
+        // Inicia sesion.
         Usuario usuarioIngresado = iniciarSesion(archivo);
 
         if (usuarioIngresado == null) {
@@ -55,7 +99,7 @@ public class MediQueueApp {
 
         mostrarConfiguracion(configuracion);
 
-        // Solo el administrador puede gestionar configuracion y usuarios
+        // Muestra el menu si el usuario es administrador.
         if (usuarioIngresado.getRol()
                 .equalsIgnoreCase("Administrador")) {
 
@@ -65,7 +109,7 @@ public class MediQueueApp {
         }
     }
 
-    // Permite iniciar sesion
+    // Inicia sesion.
     public static Usuario iniciarSesion(
             ArchivoConfiguracion archivo) {
 
@@ -103,7 +147,7 @@ public class MediQueueApp {
         return usuario;
     }
 
-    // Permite configurar la sede hospitalaria
+    // Configura la sede.
     public static Configuracion configurarSede() {
 
         String nombreSede = JOptionPane.showInputDialog(
@@ -115,9 +159,18 @@ public class MediQueueApp {
             return null;
         }
 
-        JTextField salas = crearCampoCantidad("1");
-        JTextField consultorios = crearCampoCantidad("1");
-        JTextField emergencias = crearCampoCantidad("1");
+        // Selecciona las cantidades de cada espacio.
+        JComboBox<String> salas = crearOpcionesEspacios(999);
+        JComboBox<String> consultorios = crearOpcionesEspacios(999);
+        JComboBox<String> emergencias = crearOpcionesEspacios(999);
+
+        salas.setPrototypeDisplayValue("999");
+        consultorios.setPrototypeDisplayValue("999");
+        emergencias.setPrototypeDisplayValue("999");
+
+        salas.setSelectedItem("1");
+        consultorios.setSelectedItem("1");
+        emergencias.setSelectedItem("1");
 
         JPanel panel = new JPanel(new GridLayout(0, 2, 12, 10));
         panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 14, 14, 14));
@@ -145,9 +198,9 @@ public class MediQueueApp {
         try {
             configuracion = new Configuracion(
                     nombreSede.trim(),
-                    leerCantidad(salas, "salas medicas"),
-                    leerCantidad(consultorios, "consultorios"),
-                    leerCantidad(emergencias, "salas de emergencia"));
+                    leerCantidadSeleccionada(salas, "salas medicas"),
+                    leerCantidadSeleccionada(consultorios, "consultorios"),
+                    leerCantidadSeleccionada(emergencias, "salas de emergencia"));
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(
                     null, ex.getMessage(), "Cantidad no valida",
@@ -162,34 +215,7 @@ public class MediQueueApp {
         return configuracion;
     }
 
-    // Crea un campo de texto para escribir cantidades directamente
-    public static JTextField crearCampoCantidad(String valorInicial) {
-        return new JTextField(valorInicial, 8);
-    }
-
-    // Valida que la cantidad sea un numero entero mayor o igual a uno
-    private static int leerCantidad(
-            JTextField campo, String descripcion) {
-
-        String texto = campo.getText().trim();
-
-        try {
-            int cantidad = Integer.parseInt(texto);
-
-            if (cantidad < 1) {
-                throw new NumberFormatException();
-            }
-
-            return cantidad;
-
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(
-                    "La cantidad de " + descripcion
-                    + " debe ser un numero entero mayor o igual a 1.");
-        }
-    }
-
-    // Permite seleccionar los espacios especiales
+    // Selecciona los espacios especiales.
     public static boolean seleccionarEspaciosEspeciales(
             Configuracion configuracion) {
 
@@ -213,8 +239,14 @@ public class MediQueueApp {
         salaCritica.setSelectedItem(
                 String.valueOf(configuracion.getSalaEmergenciaCritica()));
 
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        // Muestra los selectores de espacios especiales.
+        JPanel panel = new JPanel(new GridLayout(0, 2, 12, 10));
+        panel.setBorder(
+                javax.swing.BorderFactory.createEmptyBorder(14, 14, 14, 14));
+
+        salaPreferencial.setPrototypeDisplayValue("999");
+        consultorioPreferencial.setPrototypeDisplayValue("999");
+        salaCritica.setPrototypeDisplayValue("999");
 
         panel.add(new JLabel("Numero de la sala preferencial:"));
         panel.add(salaPreferencial);
@@ -251,7 +283,7 @@ public class MediQueueApp {
         return true;
     }
 
-    // Crea opciones segun la cantidad de espacios
+    // Crea las opciones de cantidad.
     public static JComboBox<String> crearOpcionesEspacios(int cantidad) {
 
         JComboBox<String> opciones = new JComboBox<String>();
@@ -263,7 +295,7 @@ public class MediQueueApp {
         return opciones;
     }
 
-    // Muestra la configuracion en consola
+    // Muestra los datos de la sede.
     public static void mostrarConfiguracion(
             Configuracion configuracion) {
 
@@ -300,7 +332,7 @@ public class MediQueueApp {
         System.out.println();
     }
 
-    // Muestra el menu de administracion
+    // Menu de administracion.
     public static void mostrarMenuAdministrador(
             ArchivoConfiguracion archivo, String usuarioActual) {
 
@@ -339,6 +371,22 @@ public class MediQueueApp {
 
                 restablecerConfiguracion(archivo);
 
+            } else if (opcion.equals("9")) {
+
+                registrarPaciente();
+
+            } else if (opcion.equals("10")) {
+
+                generarTiquete();
+
+            } else if (opcion.equals("11")) {
+
+                consultarPacientes();
+
+            } else if (opcion.equals("12")) {
+
+                consultarTiquetes();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -358,14 +406,32 @@ public class MediQueueApp {
                 if (confirmacion == JOptionPane.YES_OPTION) {
 
                     if (archivo.reiniciarSistema()) {
+                        try {
+                            // Se elimina tambien el archivo de pacientes.
+                            
+                            persistenciaDatos.eliminarPacientes();
+                            primerPaciente = null;
+                            ultimoPaciente = null;
+                            primerTiquete = null;
+                            ultimoTiquete = null;
 
-                        JOptionPane.showMessageDialog(
-                                null,
-                                "El sistema se reinicio correctamente.\n"
-                                + "La aplicacion se cerrara para comenzar "
-                                + "desde cero.");
+                            JOptionPane.showMessageDialog(
+                                    null,
+                                    "El sistema se reinicio correctamente.\n"
+                                    + "La aplicacion se cerrara para comenzar "
+                                    + "desde cero.");
 
-                        System.exit(0);
+                            System.exit(0);
+
+                        } catch (IOException ex) {
+                            JOptionPane.showMessageDialog(
+                                    null,
+                                    "La configuracion se reinicio, pero no se "
+                                    + "pudo eliminar pacientes.json.\n"
+                                    + ex.getMessage(),
+                                    "Error al reiniciar",
+                                    JOptionPane.ERROR_MESSAGE);
+                        }
 
                     } else {
 
@@ -385,7 +451,7 @@ public class MediQueueApp {
         }
     }
 
-    // Muestra el menu de administracion con alineacion uniforme
+    // Arma el menu de administracion.
     private static String solicitarOpcionMenuAdministrador() {
         JPanel panel = new JPanel(new java.awt.BorderLayout(0, 12));
         panel.setBorder(
@@ -430,6 +496,13 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "6. Eliminar configuracion", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
+        agregarOpcionMenu(opciones, "GESTION DE PACIENTES Y TIQUETES", true);
+        agregarOpcionMenu(opciones, "9. Registrar paciente/cliente", false);
+        agregarOpcionMenu(opciones, "10. Generar tiquete de atencion", false);
+        agregarOpcionMenu(opciones, "11. Consultar pacientes", false);
+        agregarOpcionMenu(opciones, "12. Consultar tiquetes", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
+
         agregarOpcionMenu(opciones, "SISTEMA", true);
         agregarOpcionMenu(opciones, "7. Cerrar sesion", false);
         agregarOpcionMenu(opciones, "8. Reiniciar sistema", false);
@@ -455,6 +528,454 @@ public class MediQueueApp {
         return campoOpcion.getText().trim();
     }
 
+    // Carga los pacientes primero para poder enlazarlos con sus tiquetes.
+    private static boolean cargarDatosPersistentes() {
+        try {
+            primerPaciente = persistenciaDatos.cargarPacientes(ADAPTADOR_PACIENTES);
+            ultimoPaciente = obtenerUltimoPaciente(primerPaciente);
+
+            primerTiquete = persistenciaDatos.cargarTiquetes(ADAPTADOR_TIQUETES);
+            ultimoTiquete = obtenerUltimoTiquete(primerTiquete);
+            return true;
+
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron cargar los pacientes o tiquetes guardados.\n"
+                    + "Para evitar sobrescribir datos, la aplicacion se cerrara.\n\n"
+                    + ex.getMessage(),
+                    "Error al recuperar datos",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private static boolean guardarPacientes() {
+        try {
+            persistenciaDatos.guardarPacientes(primerPaciente, ADAPTADOR_PACIENTES);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null, "No se pudieron guardar los pacientes.\n" + ex.getMessage(),
+                    "Error al guardar pacientes", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private static boolean guardarTiquetes() {
+        try {
+            persistenciaDatos.guardarTiquetes(primerTiquete, ADAPTADOR_TIQUETES);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null, "No se pudieron guardar los tiquetes.\n" + ex.getMessage(),
+                    "Error al guardar tiquetes", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private static String pacientesAJson(Paciente datos) {
+        StringBuilder json = new StringBuilder("{\"pacientes\":[");
+        boolean primero = true;
+
+        for (Paciente actual = datos; actual != null;
+                actual = actual.getSiguientePaciente()) {
+            if (!primero) {
+                json.append(',');
+            }
+            primero = false;
+            json.append('{')
+                    .append("\"identificacion\":")
+                    .append(EscritorJson.cadena(actual.getIdentificacion()))
+                    .append(",\"nombre\":")
+                    .append(EscritorJson.cadena(actual.getNombre()))
+                    .append(",\"edad\":")
+                    .append(actual.getEdad())
+                    .append(",\"tipoSeguro\":")
+                    .append(EscritorJson.cadena(actual.getTipoSeguro()))
+                    .append('}');
+        }
+        return json.append("]}").toString();
+    }
+
+    private static Paciente pacientesDesdeJson(String json) {
+        JsonValor raiz = new LectorJson(json).leer();
+        raiz.exigirTipo(JsonValor.OBJETO);
+        JsonValor arreglo = raiz.campo("pacientes");
+        arreglo.exigirTipo(JsonValor.ARREGLO);
+
+        Paciente primero = null;
+        Paciente ultimo = null;
+        JsonValor actual = arreglo.getPrimerHijo();
+        while (actual != null) {
+            actual.exigirTipo(JsonValor.OBJETO);
+            Paciente paciente = new Paciente(
+                    actual.campo("identificacion").comoTexto(),
+                    actual.campo("nombre").comoTexto(),
+                    actual.campo("edad").comoEntero(),
+                    actual.campo("tipoSeguro").comoTexto());
+
+            if (primero == null) {
+                primero = paciente;
+            } else {
+                ultimo.setSiguientePaciente(paciente);
+            }
+            ultimo = paciente;
+            actual = actual.getSiguiente();
+        }
+        return primero;
+    }
+
+    private static String tiquetesAJson(Tiquete datos) {
+        StringBuilder json = new StringBuilder("{\"tiquetes\":[");
+        boolean primero = true;
+
+        for (Tiquete actual = datos; actual != null;
+                actual = actual.getSiguienteRegistro()) {
+            if (actual.getPaciente() == null) {
+                throw new IllegalArgumentException("Hay un tiquete sin paciente asociado.");
+            }
+            if (!primero) {
+                json.append(',');
+            }
+            primero = false;
+            json.append('{')
+                    .append("\"id\":")
+                    .append(EscritorJson.cadena(actual.getId()))
+                    .append(",\"identificacionPaciente\":")
+                    .append(EscritorJson.cadena(actual.getPaciente().getIdentificacion()))
+                    .append(",\"fechaHoraIngreso\":")
+                    .append(EscritorJson.cadena(actual.getFechaHoraIngreso()))
+                    .append(",\"fechaHoraAtencion\":")
+                    .append(EscritorJson.cadena(actual.getFechaHoraAtencion()))
+                    .append(",\"prioridad\":")
+                    .append(EscritorJson.cadena(actual.getPrioridad()))
+                    .append(",\"tipoAtencion\":")
+                    .append(EscritorJson.cadena(actual.getTipoAtencion()))
+                    .append(",\"atencion\":")
+                    .append(EscritorJson.cadena(actual.getAtencion()))
+                    .append('}');
+        }
+        return json.append("]}").toString();
+    }
+
+    private static Tiquete tiquetesDesdeJson(String json) {
+        JsonValor raiz = new LectorJson(json).leer();
+        raiz.exigirTipo(JsonValor.OBJETO);
+        JsonValor arreglo = raiz.campo("tiquetes");
+        arreglo.exigirTipo(JsonValor.ARREGLO);
+
+        Tiquete primero = null;
+        Tiquete ultimo = null;
+        JsonValor actual = arreglo.getPrimerHijo();
+        while (actual != null) {
+            actual.exigirTipo(JsonValor.OBJETO);
+            String id = actual.campo("id").comoTexto();
+            String identificacionPaciente = actual.campo("identificacionPaciente").comoTexto();
+            Paciente paciente = buscarPacientePorIdentificacion(identificacionPaciente);
+            if (paciente == null) {
+                throw new IllegalArgumentException(
+                        "El tiquete " + id + " referencia a un paciente que no existe.");
+            }
+
+            Tiquete tiquete = new Tiquete(
+                    id, paciente,
+                    actual.campo("fechaHoraIngreso").comoTexto(),
+                    actual.campo("fechaHoraAtencion").comoTexto(),
+                    actual.campo("prioridad").comoTexto(),
+                    actual.campo("tipoAtencion").comoTexto(),
+                    actual.campo("atencion").comoTexto());
+            if (primero == null) {
+                primero = tiquete;
+            } else {
+                ultimo.setSiguienteRegistro(tiquete);
+            }
+            ultimo = tiquete;
+            actual = actual.getSiguiente();
+        }
+        return primero;
+    }
+
+    private static Paciente buscarPacientePorIdentificacion(String identificacion) {
+        Paciente actual = primerPaciente;
+        while (actual != null) {
+            if (actual.getIdentificacion().equalsIgnoreCase(identificacion)) {
+                return actual;
+            }
+            actual = actual.getSiguientePaciente();
+        }
+        return null;
+    }
+
+    private static Paciente buscarPacientePorIndice(int indice) {
+        Paciente actual = primerPaciente;
+        int posicion = 0;
+        while (actual != null) {
+            if (posicion == indice) {
+                return actual;
+            }
+            posicion++;
+            actual = actual.getSiguientePaciente();
+        }
+        return null;
+    }
+
+    private static Paciente obtenerUltimoPaciente(Paciente primero) {
+        Paciente actual = primero;
+        if (actual == null) return null;
+        while (actual.getSiguientePaciente() != null) {
+            actual = actual.getSiguientePaciente();
+        }
+        return actual;
+    }
+
+    private static Tiquete obtenerUltimoTiquete(Tiquete primero) {
+        Tiquete actual = primero;
+        if (actual == null) return null;
+        while (actual.getSiguienteRegistro() != null) {
+            actual = actual.getSiguienteRegistro();
+        }
+        return actual;
+    }
+
+    private static int contarTiquetes() {
+        int cantidad = 0;
+        Tiquete actual = primerTiquete;
+        while (actual != null) {
+            cantidad++;
+            actual = actual.getSiguienteRegistro();
+        }
+        return cantidad;
+    }
+
+    private static void agregarPaciente(Paciente paciente) {
+        paciente.setSiguientePaciente(null);
+        if (primerPaciente == null) {
+            primerPaciente = paciente;
+        } else {
+            ultimoPaciente.setSiguientePaciente(paciente);
+        }
+        ultimoPaciente = paciente;
+    }
+
+    private static void quitarUltimoPaciente() {
+        if (primerPaciente == null) return;
+        if (primerPaciente == ultimoPaciente) {
+            primerPaciente = null;
+            ultimoPaciente = null;
+            return;
+        }
+        Paciente actual = primerPaciente;
+        while (actual.getSiguientePaciente() != ultimoPaciente) {
+            actual = actual.getSiguientePaciente();
+        }
+        actual.setSiguientePaciente(null);
+        ultimoPaciente = actual;
+    }
+
+    private static void agregarTiquete(Tiquete tiquete) {
+        tiquete.setSiguienteRegistro(null);
+        if (primerTiquete == null) {
+            primerTiquete = tiquete;
+        } else {
+            ultimoTiquete.setSiguienteRegistro(tiquete);
+        }
+        ultimoTiquete = tiquete;
+    }
+
+    private static void quitarUltimoTiquete() {
+        if (primerTiquete == null) return;
+        if (primerTiquete == ultimoTiquete) {
+            primerTiquete = null;
+            ultimoTiquete = null;
+            return;
+        }
+        Tiquete actual = primerTiquete;
+        while (actual.getSiguienteRegistro() != ultimoTiquete) {
+            actual = actual.getSiguienteRegistro();
+        }
+        actual.setSiguienteRegistro(null);
+        ultimoTiquete = actual;
+    }
+
+    // Registra un paciente.
+    private static void registrarPaciente() {
+        JTextField identificacion = new JTextField(18);
+        JTextField nombre = new JTextField(18);
+        JTextField edad = new JTextField(18);
+        JComboBox<String> seguro = new JComboBox<>(new String[]{
+            "CCSS", "Privado", "No asegurado", "Otro"
+        });
+
+        JPanel panel = new JPanel(new GridLayout(0, 2, 10, 8));
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        panel.add(new JLabel("Identificacion:"));
+        panel.add(identificacion);
+        panel.add(new JLabel("Nombre completo:"));
+        panel.add(nombre);
+        panel.add(new JLabel("Edad:"));
+        panel.add(edad);
+        panel.add(new JLabel("Tipo de seguro:"));
+        panel.add(seguro);
+
+        int resultado = JOptionPane.showConfirmDialog(
+                null, panel, "Registrar paciente/cliente",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (resultado != JOptionPane.OK_OPTION) return;
+
+        String id = identificacion.getText().trim();
+        String nombrePaciente = nombre.getText().trim();
+        if (id.isEmpty() || nombrePaciente.isEmpty() || edad.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Complete todos los campos.");
+            return;
+        }
+
+        Paciente existente = primerPaciente;
+        while (existente != null) {
+            if (existente.getIdentificacion().equalsIgnoreCase(id)) {
+                JOptionPane.showMessageDialog(null, "Ya existe un paciente con esa identificacion.");
+                return;
+            }
+            existente = existente.getSiguientePaciente();
+        }
+
+        try {
+            int edadPaciente = Integer.parseInt(edad.getText().trim());
+            Paciente paciente = new Paciente(id, nombrePaciente, edadPaciente,
+                    String.valueOf(seguro.getSelectedItem()));
+            agregarPaciente(paciente);
+
+            if (!guardarPacientes()) {
+                quitarUltimoPaciente();
+                return;
+            }
+            JOptionPane.showMessageDialog(
+                    null, "Paciente registrado correctamente.\n" + paciente);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null, "La edad debe ser un numero entero.");
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(null, ex.getMessage());
+        }
+    }
+
+    // Genera un tiquete para un paciente registrado.
+    private static void generarTiquete() {
+        if (primerPaciente == null) {
+            JOptionPane.showMessageDialog(null, "Primero registre un paciente.");
+            return;
+        }
+
+        JComboBox<String> pacienteCombo = new JComboBox<>();
+        Paciente pacienteActual = primerPaciente;
+        while (pacienteActual != null) {
+            pacienteCombo.addItem(pacienteActual.getIdentificacion() + " - "
+                    + pacienteActual.getNombre());
+            pacienteActual = pacienteActual.getSiguientePaciente();
+        }
+
+        JTextField idTiquete = new JTextField("T" + (contarTiquetes() + 1), 15);
+        JComboBox<String> tipo = new JComboBox<>(new String[]{
+            "Consulta externa (C)", "Sala (S)", "Emergencia (E)"
+        });
+        JComboBox<String> atencion = new JComboBox<>(new String[]{
+            "Normal (N)", "Preferencial (P)"
+        });
+        JComboBox<String> prioridad = new JComboBox<>(new String[]{
+            Tiquete.PRIORIDAD_CRITICA, Tiquete.PRIORIDAD_URGENTE,
+            Tiquete.PRIORIDAD_REGULAR, Tiquete.PRIORIDAD_CONTROL
+        });
+
+        JPanel panel = new JPanel(new GridLayout(0, 2, 10, 8));
+        panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        panel.add(new JLabel("Paciente:"));
+        panel.add(pacienteCombo);
+        panel.add(new JLabel("ID del tiquete:"));
+        panel.add(idTiquete);
+        panel.add(new JLabel("Tipo de atencion:"));
+        panel.add(tipo);
+        panel.add(new JLabel("Categoria:"));
+        panel.add(atencion);
+        panel.add(new JLabel("Prioridad medica:"));
+        panel.add(prioridad);
+
+        int resultado = JOptionPane.showConfirmDialog(
+                null, panel, "Generar tiquete de atencion",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (resultado != JOptionPane.OK_OPTION) return;
+
+        String id = idTiquete.getText().trim();
+        if (id.isEmpty()) {
+            JOptionPane.showMessageDialog(null, "El ID del tiquete es obligatorio.");
+            return;
+        }
+
+        Tiquete existente = primerTiquete;
+        while (existente != null) {
+            if (existente.getId().equalsIgnoreCase(id)) {
+                JOptionPane.showMessageDialog(null, "Ya existe un tiquete con ese ID.");
+                return;
+            }
+            existente = existente.getSiguienteRegistro();
+        }
+
+        Paciente paciente = buscarPacientePorIndice(pacienteCombo.getSelectedIndex());
+        if (paciente == null) {
+            JOptionPane.showMessageDialog(null, "Seleccione un paciente valido.");
+            return;
+        }
+
+        String tipoSeleccionado = String.valueOf(tipo.getSelectedItem());
+        String tipoCodigo = tipoSeleccionado.contains("(C)") ? Tiquete.TIPO_CONSULTA
+                : tipoSeleccionado.contains("(S)") ? Tiquete.TIPO_SALA : Tiquete.TIPO_EMERGENCIA;
+        String atencionCodigo = String.valueOf(atencion.getSelectedItem()).contains("(P)")
+                ? Tiquete.ATENCION_PREFERENCIAL : Tiquete.ATENCION_NORMAL;
+
+        try {
+            Tiquete tiquete = new Tiquete(id, paciente,
+                    String.valueOf(prioridad.getSelectedItem()), tipoCodigo, atencionCodigo);
+            agregarTiquete(tiquete);
+
+            if (!guardarTiquetes()) {
+                quitarUltimoTiquete();
+                return;
+            }
+            JOptionPane.showMessageDialog(
+                    null, "Tiquete generado correctamente.\n" + tiquete);
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(null, ex.getMessage());
+        }
+    }
+
+    private static void consultarPacientes() {
+        if (primerPaciente == null) {
+            JOptionPane.showMessageDialog(null, "Todavia no hay pacientes registrados.");
+            return;
+        }
+        StringBuilder texto = new StringBuilder("PACIENTES REGISTRADOS\n\n");
+        Paciente actual = primerPaciente;
+        while (actual != null) {
+            texto.append(actual).append("\n");
+            actual = actual.getSiguientePaciente();
+        }
+        JOptionPane.showMessageDialog(null, texto.toString(),
+                "Consultar pacientes", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static void consultarTiquetes() {
+        if (primerTiquete == null) {
+            JOptionPane.showMessageDialog(null, "Todavia no hay tiquetes registrados.");
+            return;
+        }
+        StringBuilder texto = new StringBuilder("TIQUETES REGISTRADOS\n\n");
+        Tiquete actual = primerTiquete;
+        while (actual != null) {
+            texto.append(actual).append("\n\n");
+            actual = actual.getSiguienteRegistro();
+        }
+        JOptionPane.showMessageDialog(null, texto.toString(),
+                "Consultar tiquetes", JOptionPane.INFORMATION_MESSAGE);
+    }
+
     private static void agregarOpcionMenu(
             JPanel panel, String texto, boolean encabezado) {
 
@@ -469,7 +990,7 @@ public class MediQueueApp {
         panel.add(etiqueta);
     }
 
-    // Permite escoger que parte de la configuracion modificar
+    // Permite modificar la configuracion.
     public static void modificarConfiguracion(
             ArchivoConfiguracion archivo) {
 
@@ -519,7 +1040,7 @@ public class MediQueueApp {
         }
     }
 
-    // Cambia unicamente el nombre de la sede
+    // Cambia el nombre de la sede.
     public static void modificarNombreSede(
             ArchivoConfiguracion archivo) {
 
@@ -560,7 +1081,23 @@ public class MediQueueApp {
         }
     }
 
-    // Modifica las cantidades sin cambiar el nombre de la sede
+    // Lee la cantidad seleccionada.
+    private static int leerCantidadSeleccionada(
+            JComboBox<String> campo, String descripcion) {
+        try {
+            int cantidad = Integer.parseInt(campo.getSelectedItem().toString());
+            if (cantidad < 1) {
+                throw new NumberFormatException();
+            }
+            return cantidad;
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException(
+                    "La cantidad de " + descripcion
+                    + " debe ser un numero entero mayor o igual a 1.");
+        }
+    }
+
+    // Modifica las cantidades de espacios.
     public static void modificarCantidades(
             ArchivoConfiguracion archivo) {
 
@@ -570,12 +1107,18 @@ public class MediQueueApp {
             return;
         }
 
-        JTextField salas = crearCampoCantidad(
-                String.valueOf(actual.getCantidadSalas()));
-        JTextField consultorios = crearCampoCantidad(
-                String.valueOf(actual.getCantidadConsultorios()));
-        JTextField emergencias = crearCampoCantidad(
-                String.valueOf(actual.getCantidadEmergencias()));
+        // Permite seleccionar las nuevas cantidades.
+        JComboBox<String> salas = crearOpcionesEspacios(999);
+        JComboBox<String> consultorios = crearOpcionesEspacios(999);
+        JComboBox<String> emergencias = crearOpcionesEspacios(999);
+
+        salas.setPrototypeDisplayValue("999");
+        consultorios.setPrototypeDisplayValue("999");
+        emergencias.setPrototypeDisplayValue("999");
+
+        salas.setSelectedItem(String.valueOf(actual.getCantidadSalas()));
+        consultorios.setSelectedItem(String.valueOf(actual.getCantidadConsultorios()));
+        emergencias.setSelectedItem(String.valueOf(actual.getCantidadEmergencias()));
 
         JPanel panel = new JPanel(new GridLayout(0, 2, 12, 10));
         panel.setBorder(javax.swing.BorderFactory.createEmptyBorder(14, 14, 14, 14));
@@ -598,7 +1141,7 @@ public class MediQueueApp {
             return;
         }
 
-        // Guarda las cantidades anteriores para poder recuperarlas
+        // Guarda las cantidades actuales.
         int salasAnteriores = actual.getCantidadSalas();
         int consultoriosAnteriores = actual.getCantidadConsultorios();
         int emergenciasAnteriores = actual.getCantidadEmergencias();
@@ -608,9 +1151,9 @@ public class MediQueueApp {
         int nuevasEmergencias;
 
         try {
-            nuevasSalas = leerCantidad(salas, "salas medicas");
-            nuevosConsultorios = leerCantidad(consultorios, "consultorios");
-            nuevasEmergencias = leerCantidad(
+            nuevasSalas = leerCantidadSeleccionada(salas, "salas medicas");
+            nuevosConsultorios = leerCantidadSeleccionada(consultorios, "consultorios");
+            nuevasEmergencias = leerCantidadSeleccionada(
                     emergencias, "salas de emergencia");
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(
@@ -625,7 +1168,7 @@ public class MediQueueApp {
 
         if (!seleccionarEspaciosEspeciales(actual)) {
 
-            // Recupera las cantidades anteriores si se cancela
+            // Si se cancela, deja las cantidades anteriores.
             actual.setCantidadSalas(salasAnteriores);
             actual.setCantidadConsultorios(consultoriosAnteriores);
             actual.setCantidadEmergencias(emergenciasAnteriores);
@@ -647,7 +1190,7 @@ public class MediQueueApp {
         }
     }
 
-    // Modifica unicamente los espacios especiales
+    // Modifica los espacios especiales.
     public static void modificarEspaciosEspeciales(
             ArchivoConfiguracion archivo) {
 
@@ -675,7 +1218,7 @@ public class MediQueueApp {
         }
     }
 
-    // Elimina la configuracion sin borrar usuarios ni solicitar otra
+    // Elimina la configuracion de la sede.
     public static void restablecerConfiguracion(
             ArchivoConfiguracion archivo) {
 
@@ -709,7 +1252,7 @@ public class MediQueueApp {
         }
     }
 
-    // Registra un usuario nuevo
+    // Registra un usuario.
     public static void registrarUsuario(
             ArchivoConfiguracion archivo) {
 
@@ -764,7 +1307,7 @@ public class MediQueueApp {
         }
     }
 
-    // Crea las opciones de roles permitidos
+    // Crea la lista de roles.
     public static JComboBox<String> crearOpcionesRoles() {
 
         JComboBox<String> roles = new JComboBox<String>();
@@ -777,7 +1320,7 @@ public class MediQueueApp {
         return roles;
     }
 
-    // Permite editar un usuario
+    // Edita un usuario.
     public static void editarUsuario(
             ArchivoConfiguracion archivo) {
 
@@ -845,7 +1388,7 @@ public class MediQueueApp {
         }
     }
 
-    // Elimina un usuario con confirmacion
+    // Elimina un usuario.
     public static void eliminarUsuario(
             ArchivoConfiguracion archivo, String usuarioActual) {
 

@@ -1,5 +1,4 @@
 package cr.ac.ufidelitas.mediqueueapp;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -33,6 +32,21 @@ public final class PersistenciaDatos {
         escribir("config.json", json);
     }
 
+    // Carga el archivo de pacientes como texto JSON
+    public String cargarPacientes() throws IOException {
+        return leer("pacientes.json");
+    }
+
+    // Guarda los pacientes como texto JSON
+    public void guardarPacientes(String json) throws IOException {
+        escribir("pacientes.json", json);
+    }
+
+    // Elimina el archivo de pacientes durante el reinicio del sistema
+    public void eliminarPacientes() throws IOException {
+        Files.deleteIfExists(carpetaDatos.resolve("pacientes.json"));
+    }
+
     // Carga el archivo de tiquetes como texto JSON
     public String cargarTiquetes() throws IOException {
         return leer("tiquetes.json");
@@ -62,6 +76,24 @@ public final class PersistenciaDatos {
 
         guardarConfiguracion(
                 convertir(configuracion, adaptador));
+    }
+
+    // Carga los pacientes mediante un adaptador
+    public <T> T cargarPacientes(
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        return reconstruir(
+                cargarPacientes(),
+                adaptador,
+                "pacientes.json");
+    }
+
+    // Guarda los pacientes mediante un adaptador
+    public <T> void guardarPacientes(
+            T pacientes,
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        guardarPacientes(convertir(pacientes, adaptador));
     }
 
     // Carga los tiquetes mediante un adaptador

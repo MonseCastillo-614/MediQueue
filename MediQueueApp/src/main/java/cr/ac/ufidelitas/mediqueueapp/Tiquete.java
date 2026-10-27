@@ -1,9 +1,6 @@
-package cr.ac.ufidelitas.mediqueapp.pacientes.tiquetes;
-
-import cr.ac.ufidelitas.mediqueapp.pacientes.tiquetes.Paciente;
+package cr.ac.ufidelitas.mediqueueapp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-
 /**
  *
  *
@@ -11,22 +8,26 @@ import java.time.format.DateTimeFormatter;
  */
 public class Tiquete {
 
-    // Constantes para Tipo de Atención
+    // Tipo de atencion
     public static final String TIPO_CONSULTA = "C";
     public static final String TIPO_SALA = "S";
     public static final String TIPO_EMERGENCIA = "E";
 
-    // Constantes para Categoría de Atención (Preferencial o Normal)
+    // Categoria de atencion
     public static final String ATENCION_PREFERENCIAL = "P";
     public static final String ATENCION_NORMAL = "N";
 
-    // Constantes para Prioridad Médica
-    public static final String PRIORIDAD_CRITICA = "Critica";
-    public static final String PRIORIDAD_ALTA = "Alta";
-    public static final String PRIORIDAD_MEDIA = "Media";
-    public static final String PRIORIDAD_BAJA = "Baja";
+    // Prioridades que pide el proyecto
+    public static final String PRIORIDAD_CRITICA = "Critico";
+    public static final String PRIORIDAD_URGENTE = "Urgente";
+    public static final String PRIORIDAD_REGULAR = "Regular";
+    public static final String PRIORIDAD_CONTROL = "Control";
 
-    // Valor por defecto cuando el tiquete aún no ha sido atendido
+    // Se usa para no romper codigo con los nombres anteriores.
+    public static final String PRIORIDAD_ALTA = PRIORIDAD_URGENTE;
+    public static final String PRIORIDAD_MEDIA = PRIORIDAD_REGULAR;
+    public static final String PRIORIDAD_BAJA = PRIORIDAD_CONTROL;
+
     public static final String SIN_ATENDER = "-1";
 
     private static final DateTimeFormatter FORMATO_FECHA =
@@ -39,27 +40,20 @@ public class Tiquete {
     private String prioridad;
     private String tipoAtencion;
     private String atencion;
+    private Tiquete siguienteRegistro;
 
-    
     public Tiquete() {
         this.fechaHoraAtencion = SIN_ATENDER;
     }
 
-    // Constructor que toma la fecha/hora actual de ingreso e inicia atención en "-1"
+    // Crea un tiquete con la fecha actual.
     public Tiquete(String id, Paciente paciente, String prioridad,
             String tipoAtencion, String atencion) {
-        this(
-                id,
-                paciente,
+        this(id, paciente,
                 LocalDateTime.now().format(FORMATO_FECHA),
-                SIN_ATENDER,
-                prioridad,
-                tipoAtencion,
-                atencion
-        );
+                SIN_ATENDER, prioridad, tipoAtencion, atencion);
     }
 
-    // Constructor completo 
     public Tiquete(String id, Paciente paciente, String fechaHoraIngreso,
             String fechaHoraAtencion, String prioridad,
             String tipoAtencion, String atencion) {
@@ -71,16 +65,14 @@ public class Tiquete {
         this.id = id.trim();
         this.paciente = paciente;
         this.fechaHoraIngreso = fechaHoraIngreso.trim();
-        this.fechaHoraAtencion = (fechaHoraAtencion == null || fechaHoraAtencion.trim().isEmpty())
-                ? SIN_ATENDER
-                : fechaHoraAtencion.trim();
-
+        this.fechaHoraAtencion = (fechaHoraAtencion == null
+                || fechaHoraAtencion.trim().isEmpty())
+                ? SIN_ATENDER : fechaHoraAtencion.trim();
         this.prioridad = normalizarPrioridad(prioridad);
         this.tipoAtencion = normalizarTipoAtencion(tipoAtencion);
         this.atencion = normalizarAtencion(atencion);
     }
 
-    // Validaciones internas siguiendo el estándar del proyecto
     private void validarId(String id) {
         if (id == null || id.trim().isEmpty()) {
             throw new IllegalArgumentException("El ID del tiquete es obligatorio.");
@@ -99,6 +91,7 @@ public class Tiquete {
         }
     }
 
+    // Acepta tambien los nombres anteriores para poder leer tiquetes ya guardados.
     private String normalizarPrioridad(String prioridad) {
         if (prioridad == null || prioridad.trim().isEmpty()) {
             throw new IllegalArgumentException("La prioridad medica es obligatoria.");
@@ -106,21 +99,27 @@ public class Tiquete {
 
         String valor = prioridad.trim();
 
-        if (valor.equalsIgnoreCase("Critica") || valor.equalsIgnoreCase("Crítica")) {
+        if (valor.equalsIgnoreCase("Critico")
+                || valor.equalsIgnoreCase("Crítico")
+                || valor.equalsIgnoreCase("Critica")
+                || valor.equalsIgnoreCase("Crítica")) {
             return PRIORIDAD_CRITICA;
         }
-        if (valor.equalsIgnoreCase("Alta")) {
-            return PRIORIDAD_ALTA;
+        if (valor.equalsIgnoreCase(PRIORIDAD_URGENTE)
+                || valor.equalsIgnoreCase("Alta")) {
+            return PRIORIDAD_URGENTE;
         }
-        if (valor.equalsIgnoreCase("Media")) {
-            return PRIORIDAD_MEDIA;
+        if (valor.equalsIgnoreCase(PRIORIDAD_REGULAR)
+                || valor.equalsIgnoreCase("Media")) {
+            return PRIORIDAD_REGULAR;
         }
-        if (valor.equalsIgnoreCase("Baja")) {
-            return PRIORIDAD_BAJA;
+        if (valor.equalsIgnoreCase(PRIORIDAD_CONTROL)
+                || valor.equalsIgnoreCase("Baja")) {
+            return PRIORIDAD_CONTROL;
         }
 
         throw new IllegalArgumentException(
-                "Prioridad invalida. Use: Critica, Alta, Media o Baja.");
+                "Prioridad invalida. Use: Critico, Urgente, Regular o Control.");
     }
 
     private String normalizarTipoAtencion(String tipoAtencion) {
@@ -130,7 +129,9 @@ public class Tiquete {
 
         String valor = tipoAtencion.trim();
 
-        if (valor.equalsIgnoreCase("C") || valor.equalsIgnoreCase("Consulta")) {
+        if (valor.equalsIgnoreCase("C")
+                || valor.equalsIgnoreCase("Consulta")
+                || valor.equalsIgnoreCase("Consulta Externa")) {
             return TIPO_CONSULTA;
         }
         if (valor.equalsIgnoreCase("S")
@@ -151,15 +152,18 @@ public class Tiquete {
 
     private String normalizarAtencion(String atencion) {
         if (atencion == null || atencion.trim().isEmpty()) {
-            throw new IllegalArgumentException("La categoria de atencion (P o N) es obligatoria.");
+            throw new IllegalArgumentException(
+                    "La categoria de atencion (P o N) es obligatoria.");
         }
 
         String valor = atencion.trim();
 
-        if (valor.equalsIgnoreCase("P") || valor.equalsIgnoreCase("Preferencial")) {
+        if (valor.equalsIgnoreCase("P")
+                || valor.equalsIgnoreCase("Preferencial")) {
             return ATENCION_PREFERENCIAL;
         }
-        if (valor.equalsIgnoreCase("N") || valor.equalsIgnoreCase("Normal")) {
+        if (valor.equalsIgnoreCase("N")
+                || valor.equalsIgnoreCase("Normal")) {
             return ATENCION_NORMAL;
         }
 
@@ -167,12 +171,10 @@ public class Tiquete {
                 "Atencion invalida. Use P (Preferencial) o N (Normal).");
     }
 
-    // Registra el momento exacto en que el paciente es atendido
     public void registrarAtencion() {
         this.fechaHoraAtencion = LocalDateTime.now().format(FORMATO_FECHA);
     }
 
-    // Permite registrar una fecha/hora de atención específica
     public void registrarAtencion(String fechaHora) {
         if (fechaHora == null || fechaHora.trim().isEmpty()) {
             throw new IllegalArgumentException("La fecha de atencion no puede estar vacia.");
@@ -180,37 +182,45 @@ public class Tiquete {
         this.fechaHoraAtencion = fechaHora.trim();
     }
 
-    
     public boolean estaAtendido() {
         return fechaHoraAtencion != null && !SIN_ATENDER.equals(fechaHoraAtencion);
     }
 
-    
     public boolean esPreferencial() {
         return ATENCION_PREFERENCIAL.equalsIgnoreCase(atencion);
     }
 
-    // Indica si es una emergencia crítica
     public boolean esEmergenciaCritica() {
         return TIPO_EMERGENCIA.equalsIgnoreCase(tipoAtencion)
                 && PRIORIDAD_CRITICA.equalsIgnoreCase(prioridad);
     }
 
-    
+    // El nivel 1 es el de mayor prioridad.
     public int obtenerNivelPrioridad() {
         if (PRIORIDAD_CRITICA.equalsIgnoreCase(prioridad)) {
             return 1;
         }
-        if (PRIORIDAD_ALTA.equalsIgnoreCase(prioridad)) {
+        if (PRIORIDAD_URGENTE.equalsIgnoreCase(prioridad)) {
             return 2;
         }
-        if (PRIORIDAD_MEDIA.equalsIgnoreCase(prioridad)) {
+        if (PRIORIDAD_REGULAR.equalsIgnoreCase(prioridad)) {
             return 3;
         }
-        return 4;
+        if (PRIORIDAD_CONTROL.equalsIgnoreCase(prioridad)) {
+            return 4;
+        }
+        throw new IllegalStateException("Prioridad no valida: " + prioridad);
     }
 
-   
+    // Enlace para recorrer los tiquetes registrados.
+    Tiquete getSiguienteRegistro() {
+        return siguienteRegistro;
+    }
+
+    void setSiguienteRegistro(Tiquete siguienteRegistro) {
+        this.siguienteRegistro = siguienteRegistro;
+    }
+
     public String getId() {
         return id;
     }
@@ -274,7 +284,6 @@ public class Tiquete {
         this.atencion = normalizarAtencion(atencion);
     }
 
-    // Métodos delegados para acceder directo a los datos del paciente desde el tiquete
     public String getNombrePaciente() {
         return paciente != null ? paciente.getNombre() : "";
     }
@@ -297,8 +306,9 @@ public class Tiquete {
                 + (paciente != null ? paciente.toString() : "Sin paciente")
                 + " | Prioridad: " + prioridad
                 + " | Tipo: " + tipoAtencion
-                + " | Atención: " + atencion
+                + " | Atencion: " + atencion
                 + " | Ingreso: " + fechaHoraIngreso
-                + " | Atendido: " + (estaAtendido() ? fechaHoraAtencion : "Pendiente (-1)");
+                + " | Atendido: " + (estaAtendido()
+                ? fechaHoraAtencion : "Pendiente (-1)");
     }
 }

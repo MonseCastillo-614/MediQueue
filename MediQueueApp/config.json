@@ -1,4 +1,13 @@
 {
+  "configuracion": {
+    "nombreSede": "SJ",
+    "cantidadSalas": 3,
+    "cantidadConsultorios": 8,
+    "cantidadEmergencias": 1,
+    "salaPreferencial": 2,
+    "consultorioPreferencial": 4,
+    "salaEmergenciaCritica": 1
+  },
   "usuarios": {
     "usuario": {
       "nombreUsuario": "admin",

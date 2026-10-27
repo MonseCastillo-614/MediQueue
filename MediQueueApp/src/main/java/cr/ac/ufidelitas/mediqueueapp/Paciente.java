@@ -1,5 +1,4 @@
-
-package cr.ac.ufidelitas.mediqueapp.pacientes.tiquetes;
+package cr.ac.ufidelitas.mediqueueapp;
 
 /**
  * 
@@ -12,6 +11,7 @@ public class Paciente {
     private String nombre;
     private int edad;
     private String tipoSeguro;
+    private Paciente siguientePaciente;
 
     // Constructor vacío requerido para el JSON / Gson
     public Paciente() {
@@ -77,6 +77,15 @@ public class Paciente {
     public void setTipoSeguro(String tipoSeguro) {
         validarTexto(tipoSeguro, "El tipo de seguro es obligatorio.");
         this.tipoSeguro = tipoSeguro.trim();
+    }
+
+    // Enlace al siguiente paciente registrado.
+    Paciente getSiguientePaciente() {
+        return siguientePaciente;
+    }
+
+    void setSiguientePaciente(Paciente siguientePaciente) {
+        this.siguientePaciente = siguientePaciente;
     }
 
     // Indica si por edad (adulto mayor) aplica sugerencia de trato preferencial
