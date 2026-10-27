@@ -75,7 +75,7 @@ Incluir los datos del paciente, las fechas, la prioridad y el tipo de atención.
 
 Trabajo realizado:
 En la clase de Paciente.java realice una sección para guardar los datos básicos de cada paciente (nombre, cédula, edad y tipo de seguro), asegurándonos de que la información esté completa y correcta.
-Por otro lado em la clase Tiquete.java creamos el tiquete que se le entrega a cada persona, el cual incluye un número de orden, la hora en que llegó, qué tan urgente es su caso (desde crítico hasta bajo), el tipo de atención que requiere y si le corresponde un trato preferencial o normal. Con esto, el sistema puede organizar la fila automáticamente para atender primero a quienes más lo necesitan.
+Por otro lado la clase Tiquete.java creamos el tiquete que se le entrega a cada persona, el cual incluye un número de orden, la hora en que llegó, qué tan urgente es su caso (desde crítico hasta bajo), el tipo de atención que requiere y si le corresponde un trato preferencial o normal. Con esto, el sistema puede organizar la fila automáticamente para atender primero a quienes más lo necesitan.
 
 
 Persona 4: ALLISON EDELL ALEGRIA
