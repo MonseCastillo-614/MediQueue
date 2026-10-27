@@ -78,7 +78,7 @@ En la clase de Paciente.java realice una sección para guardar los datos básico
 Por otro lado la clase Tiquete.java creamos el tiquete que se le entrega a cada persona, el cual incluye un número de orden, la hora en que llegó, qué tan urgente es su caso (desde crítico hasta bajo), el tipo de atención que requiere y si le corresponde un trato preferencial o normal. Con esto, el sistema puede organizar la fila automáticamente para atender primero a quienes más lo necesitan.
 
 
-Persona 4: ALLISON EDELL ALEGRIA
+Persona 4: ALISSON EDELL ALEGRIA
 
 Responsabilidad: Colas de prioridad e integración
 
@@ -89,4 +89,13 @@ Organizar los tiquetes según las reglas del enunciado.
 Integrar y probar el registro de pacientes con las demás clases.
 
 Trabajo realizado:
+Implementé las colas dinámicas de prioridad y su integración con Paciente y Tiquete.
+
+- NodoTiquete: nodo de la lista enlazada; guarda un Tiquete y el siguiente nodo.
+- ColaTiquetes: cola FIFO dinámica (frente y fin). Permite encolar, desencolar, ver el frente, verificar si está vacía y obtener su tamaño.
+- ColaPrioridad: cola de prioridad formada por varias ColaTiquetes. Atiende primero la prioridad médica más alta (Crítica, Alta, Media, Baja) a igual prioridad, los preferenciales antes que los normales y a igualdad total, por orden de llegada.
+- GestorTiquetes:  Paciente, Tiquete y las colas, con una cola por tipo de atención (Consulta, Sala y Emergencias). Registra pacientes y genera su tiquete (C-001, S-001, E-001), evita tiquetes pendientes duplicados, atiende al siguiente registrando la hora y permite consultar y listar los pendientes.
+- MenuTiquetes: menú para registrar pacientes, ver el siguiente, ver los pacientes en espera y atender, según el rol del usuario.
+- PruebaColasPrioridad: programa de pruebas (31 verificaciones) de las colas y del registro de pacientes.
+
 
