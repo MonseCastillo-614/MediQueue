@@ -24,6 +24,9 @@ public class MediQueueApp {
     private static Tiquete primerTiquete;
     private static Tiquete ultimoTiquete;
 
+    // Administra las colas de prioridad de los tiquetes pendientes.
+    private static final GestorTiquetes gestorTiquetes = new GestorTiquetes();
+
     private static final PersistenciaDatos persistenciaDatos =
             new PersistenciaDatos(Paths.get("."));
 
@@ -387,6 +390,10 @@ public class MediQueueApp {
 
                 consultarTiquetes();
 
+            } else if (opcion.equals("13")) {
+
+                consultarColasPrioridad();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -501,6 +508,7 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "10. Generar tiquete de atencion", false);
         agregarOpcionMenu(opciones, "11. Consultar pacientes", false);
         agregarOpcionMenu(opciones, "12. Consultar tiquetes", false);
+        agregarOpcionMenu(opciones, "13. Consultar colas de prioridad", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
         agregarOpcionMenu(opciones, "SISTEMA", true);
@@ -536,6 +544,16 @@ public class MediQueueApp {
 
             primerTiquete = persistenciaDatos.cargarTiquetes(ADAPTADOR_TIQUETES);
             ultimoTiquete = obtenerUltimoTiquete(primerTiquete);
+
+            // Al iniciar, las colas se reconstruyen con los tiquetes pendientes.
+            Tiquete actual = primerTiquete;
+            while (actual != null) {
+                if (!actual.estaAtendido()) {
+                    gestorTiquetes.agregarTiquete(actual);
+                }
+                actual = actual.getSiguienteRegistro();
+            }
+
             return true;
 
         } catch (IOException | RuntimeException ex) {
@@ -924,6 +942,12 @@ public class MediQueueApp {
             return;
         }
 
+        if (gestorTiquetes.tienePendiente(paciente.getIdentificacion())) {
+            JOptionPane.showMessageDialog(null,
+                    "Este paciente ya tiene un tiquete pendiente.");
+            return;
+        }
+
         String tipoSeleccionado = String.valueOf(tipo.getSelectedItem());
         String tipoCodigo = tipoSeleccionado.contains("(C)") ? Tiquete.TIPO_CONSULTA
                 : tipoSeleccionado.contains("(S)") ? Tiquete.TIPO_SALA : Tiquete.TIPO_EMERGENCIA;
@@ -939,6 +963,17 @@ public class MediQueueApp {
                 quitarUltimoTiquete();
                 return;
             }
+
+            // El tiquete guardado tambien se agrega a su cola de prioridad.
+            try {
+                gestorTiquetes.agregarTiquete(tiquete);
+            } catch (IllegalArgumentException | IllegalStateException ex) {
+                quitarUltimoTiquete();
+                guardarTiquetes();
+                JOptionPane.showMessageDialog(null, ex.getMessage());
+                return;
+            }
+
             JOptionPane.showMessageDialog(
                     null, "Tiquete generado correctamente.\n" + tiquete);
         } catch (IllegalArgumentException ex) {
@@ -974,6 +1009,45 @@ public class MediQueueApp {
         }
         JOptionPane.showMessageDialog(null, texto.toString(),
                 "Consultar tiquetes", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Muestra los tiquetes pendientes segun el orden de cada cola.
+    private static void consultarColasPrioridad() {
+        if (gestorTiquetes.totalPendientes() == 0) {
+            JOptionPane.showMessageDialog(null,
+                    "No hay tiquetes pendientes en las colas.");
+            return;
+        }
+
+        StringBuilder texto = new StringBuilder("COLAS DE PRIORIDAD\n\n");
+        agregarColaAlTexto(texto, "E", "EMERGENCIAS");
+        agregarColaAlTexto(texto, "S", "SALAS");
+        agregarColaAlTexto(texto, "C", "CONSULTAS");
+
+        JOptionPane.showMessageDialog(null, texto.toString(),
+                "Colas de prioridad", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static void agregarColaAlTexto(StringBuilder texto,
+            String tipo, String titulo) {
+        texto.append(titulo).append("\n");
+        int cantidad = gestorTiquetes.cantidadPendientes(tipo);
+
+        if (cantidad == 0) {
+            texto.append("  Sin pacientes pendientes.\n\n");
+            return;
+        }
+
+        for (int i = 0; i < cantidad; i++) {
+            Tiquete tiquete = gestorTiquetes.obtenerPendiente(tipo, i);
+            texto.append("  ").append(i + 1).append(". ")
+                    .append(tiquete.getId()).append(" - ")
+                    .append(tiquete.getNombrePaciente())
+                    .append(" | Prioridad: ").append(tiquete.getPrioridad())
+                    .append(" | Atencion: ").append(tiquete.getAtencion())
+                    .append("\n");
+        }
+        texto.append("\n");
     }
 
     private static void agregarOpcionMenu(

@@ -1,12 +1,12 @@
 {
   "configuracion": {
-    "nombreSede": "SJ",
-    "cantidadSalas": 3,
-    "cantidadConsultorios": 8,
-    "cantidadEmergencias": 1,
-    "salaPreferencial": 2,
-    "consultorioPreferencial": 4,
-    "salaEmergenciaCritica": 1
+    "nombreSede": "Guanacaste",
+    "cantidadSalas": 1,
+    "cantidadConsultorios": 3,
+    "cantidadEmergencias": 7,
+    "salaPreferencial": 1,
+    "consultorioPreferencial": 2,
+    "salaEmergenciaCritica": 5
   },
   "usuarios": {
     "usuario": {
