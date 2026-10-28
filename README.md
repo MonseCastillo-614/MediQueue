@@ -60,6 +60,7 @@ Guardar y recuperar los tiquetes pendientes desde tiquetes.json.
 Coordinar la persistencia de los datos con las demás clases.
 
 Trabajo realizado:
+En mi parte desarrollé el módulo de persistencia de datos del sistema MediQueue, creando las clases necesarias para guardar y recuperar información mediante archivos JSON. Implementé funciones para leer y escribir los archivos config.json y tiquetes.json, además de validar su contenido y manejar posibles errores durante el almacenamiento. También trabajé en la estructura de nodos para interpretar los datos JSON y en una interfaz que permitirá conectar estas funciones con las demás clases del proyecto.
 
 
 
