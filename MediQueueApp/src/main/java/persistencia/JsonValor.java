@@ -1,4 +1,4 @@
-package cr.ac.ufidelitas.mediqueueapp;
+package persistencia;
 
 public class JsonValor {
 

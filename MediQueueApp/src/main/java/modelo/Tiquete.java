@@ -1,6 +1,9 @@
-package cr.ac.ufidelitas.mediqueueapp;
+
+package modelo;
+import modelo.Paciente;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
 /**
  *
  *
@@ -213,11 +216,11 @@ public class Tiquete {
     }
 
     // Enlace para recorrer los tiquetes registrados.
-    Tiquete getSiguienteRegistro() {
+    public Tiquete getSiguienteRegistro() {
         return siguienteRegistro;
     }
 
-    void setSiguienteRegistro(Tiquete siguienteRegistro) {
+    public void setSiguienteRegistro(Tiquete siguienteRegistro) {
         this.siguienteRegistro = siguienteRegistro;
     }
 

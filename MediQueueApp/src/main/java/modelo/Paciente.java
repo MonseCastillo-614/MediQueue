@@ -1,4 +1,4 @@
-package cr.ac.ufidelitas.mediqueueapp;
+package modelo;
 
 /**
  * 
@@ -80,11 +80,11 @@ public class Paciente {
     }
 
     // Enlace al siguiente paciente registrado.
-    Paciente getSiguientePaciente() {
+    public Paciente getSiguientePaciente() {
         return siguientePaciente;
     }
 
-    void setSiguientePaciente(Paciente siguientePaciente) {
+    public void setSiguientePaciente(Paciente siguientePaciente) {
         this.siguientePaciente = siguientePaciente;
     }
 

@@ -1,12 +1,16 @@
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  */
-package cr.ac.ufidelitas.mediqueueapp;
+package configuracion;
+import configuracion.Configuracion;
+import modelo.Usuario;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import persistencia.AdaptadorJson;
+import persistencia.PersistenciaDatos;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;

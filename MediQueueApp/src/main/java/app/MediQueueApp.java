@@ -1,7 +1,18 @@
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  */
-package cr.ac.ufidelitas.mediqueueapp;
+package app;
+import gestion.GestorTiquetes;
+import persistencia.PersistenciaDatos;
+import persistencia.LectorJson;
+import persistencia.JsonValor;
+import persistencia.EscritorJson;
+import persistencia.AdaptadorJson;
+import configuracion.ArchivoConfiguracion;
+import configuracion.Configuracion;
+import modelo.Usuario;
+import modelo.Tiquete;
+import modelo.Paciente;
 import java.io.IOException;
 import java.nio.file.Paths;
 import javax.swing.JOptionPane;
