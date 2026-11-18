@@ -10,10 +10,13 @@ import java.util.NoSuchElementException;
  * 
  * @author aedgell555
  */
+/*
+ * Cola enlazada de tiquetes de atencion.
+ */
 public class ColaTiquetes {
 
-    private NodoTiquete frente; // primer nodo
-    private NodoTiquete fin;    // ultimo nodo
+    private NodoTiquete frente;
+    private NodoTiquete fin;
     private int tamano;
 
     public ColaTiquetes() {
@@ -22,54 +25,75 @@ public class ColaTiquetes {
         this.tamano = 0;
     }
 
-    // Agrega un tiquete al final de la cola
     public void encolar(Tiquete tiquete) {
         if (tiquete == null) {
-            throw new IllegalArgumentException(
-                    "El tiquete no puede ser nulo.");
+            throw new IllegalArgumentException("El tiquete no puede ser nulo.");
         }
 
         NodoTiquete nuevo = new NodoTiquete(tiquete);
-
         if (fin != null) {
             fin.setSiguiente(nuevo);
         }
-
         fin = nuevo;
-
         if (frente == null) {
             frente = nuevo;
         }
-
         tamano++;
     }
 
-    // Elimina y devuelve el tiquete del frente
     public Tiquete desencolar() {
         if (frente == null) {
-            throw new NoSuchElementException(
-                    "La cola esta vacia.");
+            throw new NoSuchElementException("La cola esta vacia.");
         }
-
         Tiquete tiquete = frente.getTiquete();
         frente = frente.getSiguiente();
-
         if (frente == null) {
             fin = null;
         }
-
         tamano--;
         return tiquete;
     }
 
-    // Devuelve el tiquete del frente sin eliminarlo
     public Tiquete frente() {
         if (frente == null) {
-            throw new NoSuchElementException(
-                    "La cola esta vacia.");
+            throw new NoSuchElementException("La cola esta vacia.");
+        }
+        return frente.getTiquete();
+    }
+
+    /** Elimina un tiquete por ID sin alterar el orden de los demas. */
+    public boolean removerPorId(String id) {
+        if (id == null || id.trim().isEmpty() || frente == null) {
+            return false;
         }
 
-        return frente.getTiquete();
+        NodoTiquete anterior = null;
+        NodoTiquete actual = frente;
+
+        while (actual != null) {
+            Tiquete tiquete = actual.getTiquete();
+            if (tiquete.getId().equalsIgnoreCase(id)) {
+                if (anterior == null) {
+                    frente = actual.getSiguiente();
+                } else {
+                    anterior.setSiguiente(actual.getSiguiente());
+                }
+
+                if (actual == fin) {
+                    fin = anterior;
+                }
+
+                tamano--;
+                if (tamano == 0) {
+                    frente = null;
+                    fin = null;
+                }
+                return true;
+            }
+            anterior = actual;
+            actual = actual.getSiguiente();
+        }
+        return false;
     }
 
     public boolean estaVacia() {
@@ -80,21 +104,16 @@ public class ColaTiquetes {
         return tamano;
     }
 
-    // Devuelve el tiquete en la posicion indicada sin modificar la cola
     public Tiquete obtener(int posicion) {
         if (posicion < 0 || posicion >= tamano) {
-            throw new IndexOutOfBoundsException(
-                    "Posicion fuera de la cola: " + posicion);
+            throw new IndexOutOfBoundsException("Posicion fuera de la cola: " + posicion);
         }
-
         NodoTiquete actual = frente;
         int indice = 0;
-
         while (indice < posicion) {
             actual = actual.getSiguiente();
             indice++;
         }
-
         return actual.getTiquete();
     }
 }

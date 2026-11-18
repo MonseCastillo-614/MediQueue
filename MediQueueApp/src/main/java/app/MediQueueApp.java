@@ -13,6 +13,9 @@ import configuracion.Configuracion;
 import modelo.Usuario;
 import modelo.Tiquete;
 import modelo.Paciente;
+import salas.GestorSalas;
+import salas.Sala;
+import salas.Consultorio;
 import java.io.IOException;
 import java.nio.file.Paths;
 import javax.swing.JOptionPane;
@@ -37,6 +40,9 @@ public class MediQueueApp {
 
     // Administra las colas de prioridad de los tiquetes pendientes.
     private static final GestorTiquetes gestorTiquetes = new GestorTiquetes();
+
+    // Administra las salas medicas, salas de emergencia y consultorios.
+    private static GestorSalas gestorSalas;
 
     private static final PersistenciaDatos persistenciaDatos =
             new PersistenciaDatos(Paths.get("."));
@@ -98,6 +104,9 @@ public class MediQueueApp {
             }
         }
 
+        // Inicializa los espacios hospitalarios segun la configuracion.
+        inicializarEspacios(configuracion);
+
         // Inicia sesion.
         Usuario usuarioIngresado = iniciarSesion(archivo);
 
@@ -121,6 +130,62 @@ public class MediQueueApp {
                     archivo,
                     usuarioIngresado.getNombreUsuario());
         }
+    }
+
+    // Inicializa las salas y consultorios de la sede.
+    private static void inicializarEspacios(Configuracion configuracion) {
+
+        gestorSalas = new GestorSalas(configuracion);
+
+        final int CAPACIDAD_INICIAL = 5;
+
+        // Registra las salas medicas y la sala preferencial configurada.
+        for (int i = 1; i <= configuracion.getCantidadSalas(); i++) {
+
+            String tipo = Sala.TIPO_NORMAL;
+
+            if (i == configuracion.getSalaPreferencial()) {
+                tipo = Sala.TIPO_PREFERENCIAL;
+            }
+
+            Sala sala = new Sala(i, CAPACIDAD_INICIAL, tipo);
+            gestorSalas.registrarSala(sala);
+        }
+
+        // Registra las salas de emergencia.
+        for (int i = 1; i <= configuracion.getCantidadEmergencias(); i++) {
+
+            Sala emergencia = new Sala(
+                    i,
+                    CAPACIDAD_INICIAL,
+                    Sala.TIPO_EMERGENCIA);
+
+            gestorSalas.registrarSalaEmergencia(emergencia);
+        }
+
+        // Registra los consultorios y el consultorio preferencial.
+        for (int i = 1;
+                i <= configuracion.getCantidadConsultorios(); i++) {
+
+            boolean preferencial =
+                    i == configuracion.getConsultorioPreferencial();
+
+            Consultorio consultorio = new Consultorio(
+                    i,
+                    CAPACIDAD_INICIAL,
+                    "General",
+                    preferencial);
+
+            gestorSalas.registrarConsultorio(consultorio);
+        }
+
+        System.out.println("Espacios hospitalarios inicializados.");
+        System.out.println("Salas medicas: "
+                + gestorSalas.getCantidadSalasRegistradas());
+        System.out.println("Salas de emergencia: "
+                + gestorSalas.getCantidadEmergenciasRegistradas());
+        System.out.println("Consultorios: "
+                + gestorSalas.getCantidadConsultoriosRegistrados());
     }
 
     // Inicia sesion.
@@ -405,6 +470,22 @@ public class MediQueueApp {
 
                 consultarColasPrioridad();
 
+            } else if (opcion.equals("14")) {
+
+                consultarEspaciosDisponibles();
+
+            } else if (opcion.equals("15")) {
+
+                consultarPacientesPorEspacio();
+
+            } else if (opcion.equals("16")) {
+
+                consultarPacientesPorPersonal();
+
+            } else if (opcion.equals("17")) {
+
+                asignarPersonalAEspacio();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -520,6 +601,10 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "11. Consultar pacientes", false);
         agregarOpcionMenu(opciones, "12. Consultar tiquetes", false);
         agregarOpcionMenu(opciones, "13. Consultar colas de prioridad", false);
+        agregarOpcionMenu(opciones, "14. Consultar espacios disponibles", false);
+        agregarOpcionMenu(opciones, "15. Consultar pacientes por sala/consultorio", false);
+        agregarOpcionMenu(opciones, "16. Consultar pacientes por medico/enfermera", false);
+        agregarOpcionMenu(opciones, "17. Asignar personal a sala/consultorio", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
         agregarOpcionMenu(opciones, "SISTEMA", true);
@@ -968,25 +1053,37 @@ public class MediQueueApp {
         try {
             Tiquete tiquete = new Tiquete(id, paciente,
                     String.valueOf(prioridad.getSelectedItem()), tipoCodigo, atencionCodigo);
-            agregarTiquete(tiquete);
 
-            if (!guardarTiquetes()) {
-                quitarUltimoTiquete();
+            // Primero se asigna el espacio. Si no hay cupo, no se registra el tiquete.
+            boolean asignado = gestorSalas.asignarTiquete(tiquete);
+
+            if (!asignado) {
+                JOptionPane.showMessageDialog(null,
+                        "No fue posible asignar el tiquete.\n"
+                        + "Revise el tipo, la prioridad y la disponibilidad del espacio.");
                 return;
             }
 
-            // El tiquete guardado tambien se agrega a su cola de prioridad.
+            agregarTiquete(tiquete);
+            if (!guardarTiquetes()) {
+                quitarUltimoTiquete();
+                gestorSalas.removerTiquete(id);
+                return;
+            }
+
+            // Se conserva la cola de prioridad existente del proyecto.
             try {
                 gestorTiquetes.agregarTiquete(tiquete);
             } catch (IllegalArgumentException | IllegalStateException ex) {
                 quitarUltimoTiquete();
+                gestorSalas.removerTiquete(id);
                 guardarTiquetes();
                 JOptionPane.showMessageDialog(null, ex.getMessage());
                 return;
             }
 
-            JOptionPane.showMessageDialog(
-                    null, "Tiquete generado correctamente.\n" + tiquete);
+            JOptionPane.showMessageDialog(null,
+                    "Tiquete generado y asignado correctamente.\n" + tiquete);
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(null, ex.getMessage());
         }
@@ -1059,6 +1156,155 @@ public class MediQueueApp {
                     .append("\n");
         }
         texto.append("\n");
+    }
+
+    // Consulta las salas y consultorios que tienen espacio en su cola.
+    private static void consultarEspaciosDisponibles() {
+        if (gestorSalas == null) {
+            JOptionPane.showMessageDialog(null,
+                    "La administracion de espacios no esta inicializada.");
+            return;
+        }
+
+        String resultado = gestorSalas.consultarSalasDisponibles()
+                + "\n\n"
+                + gestorSalas.consultarConsultoriosDisponibles();
+
+        JOptionPane.showMessageDialog(null, resultado,
+                "Espacios disponibles", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Consulta los pacientes en espera de una sala o consultorio.
+    private static void consultarPacientesPorEspacio() {
+        String[] opciones = {
+            "Sala medica", "Sala de emergencia", "Consultorio"
+        };
+
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de espacio:",
+                "Consultar pacientes por espacio",
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+
+        if (tipo == null) {
+            return;
+        }
+
+        String entrada = JOptionPane.showInputDialog(
+                null, "Ingrese el identificador del espacio:");
+
+        if (entrada == null) {
+            return;
+        }
+
+        try {
+            int identificador = Integer.parseInt(entrada.trim());
+            String resultado;
+
+            if (tipo.equals("Sala medica")) {
+                resultado = gestorSalas.mostrarPacientesPorSala(identificador);
+            } else if (tipo.equals("Sala de emergencia")) {
+                resultado = gestorSalas.mostrarPacientesPorSalaEmergencia(
+                        identificador);
+            } else {
+                resultado = gestorSalas.mostrarPacientesPorConsultorio(
+                        identificador);
+            }
+
+            JOptionPane.showMessageDialog(null, resultado,
+                    "Pacientes en espera", JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "El identificador debe ser un numero entero.");
+        }
+    }
+
+    // Asigna el personal responsable de una sala o consultorio.
+    private static void asignarPersonalAEspacio() {
+        if (gestorSalas == null) {
+            JOptionPane.showMessageDialog(null,
+                    "La administracion de espacios no esta inicializada.");
+            return;
+        }
+
+        String[] tipos = {"Sala medica", "Sala de emergencia", "Consultorio"};
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de espacio:",
+                "Asignar personal", JOptionPane.QUESTION_MESSAGE,
+                null, tipos, tipos[0]);
+        if (tipo == null) return;
+
+        String entrada = JOptionPane.showInputDialog(
+                null, "Ingrese el identificador del espacio:");
+        if (entrada == null) return;
+
+        try {
+            int id = Integer.parseInt(entrada.trim());
+            String medico = JOptionPane.showInputDialog(
+                    null, "Nombre del medico responsable:");
+            if (medico == null || medico.trim().isEmpty()) return;
+
+            if (tipo.equals("Consultorio")) {
+                Consultorio consultorio = gestorSalas.buscarConsultorio(id);
+                if (consultorio == null) {
+                    JOptionPane.showMessageDialog(null,
+                            "No existe ese consultorio.");
+                    return;
+                }
+                consultorio.setMedicoResponsable(medico.trim());
+            } else {
+                Sala sala = tipo.equals("Sala medica")
+                        ? gestorSalas.buscarSala(id)
+                        : gestorSalas.buscarSalaEmergencia(id);
+                if (sala == null) {
+                    JOptionPane.showMessageDialog(null,
+                            "No existe esa sala.");
+                    return;
+                }
+                sala.setMedicoResponsable(medico.trim());
+                String enfermera = JOptionPane.showInputDialog(
+                        null, "Nombre de la enfermera a cargo:");
+                if (enfermera == null || enfermera.trim().isEmpty()) return;
+                sala.setEnfermeraCargo(enfermera.trim());
+            }
+
+            JOptionPane.showMessageDialog(null,
+                    "Personal asignado correctamente al espacio.");
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "El identificador debe ser un numero entero.");
+        }
+    }
+
+    // Consulta los pacientes en espera asociados a un medico o enfermera.
+    private static void consultarPacientesPorPersonal() {
+        String[] opciones = {"Medico", "Enfermera"};
+
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de personal:",
+                "Consultar pacientes por personal",
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+
+        if (tipo == null) {
+            return;
+        }
+
+        String nombre = JOptionPane.showInputDialog(
+                null, "Ingrese el nombre del " + tipo.toLowerCase() + ":");
+
+        if (nombre == null || nombre.trim().isEmpty()) {
+            return;
+        }
+
+        String resultado;
+        if (tipo.equals("Medico")) {
+            resultado = gestorSalas.mostrarPacientesPorMedico(nombre.trim());
+        } else {
+            resultado = gestorSalas.mostrarPacientesPorEnfermera(nombre.trim());
+        }
+
+        JOptionPane.showMessageDialog(null, resultado,
+                "Pacientes por personal", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private static void agregarOpcionMenu(

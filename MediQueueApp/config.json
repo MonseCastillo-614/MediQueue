@@ -13,6 +13,13 @@
       "nombreUsuario": "admin",
       "contrasena": "prueba123",
       "rol": "Administrador"
+    },
+    "siguiente": {
+      "usuario": {
+        "nombreUsuario": "medico",
+        "contrasena": "1",
+        "rol": "Medico"
+      }
     }
   }
 }
