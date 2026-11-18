@@ -1,4 +1,6 @@
-package cr.ac.ufidelitas.mediqueueapp;
+package persistencia;
+
+import persistencia.JsonValor;
 
 public class LectorJson {
 

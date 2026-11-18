@@ -1,4 +1,7 @@
-package cr.ac.ufidelitas.mediqueueapp;
+package persistencia;
+import persistencia.LectorJson;
+import persistencia.JsonValor;
+import persistencia.AdaptadorJson;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
