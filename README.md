@@ -104,7 +104,7 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 
 # UNIVERSIDAD FIDÉLITAS
 
-#
+
 **Curso: Estructura de Datos**
 
 # MEDIQUEUE
