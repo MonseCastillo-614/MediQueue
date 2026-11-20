@@ -1,6 +1,7 @@
 <div align="center">
 
-# UNIVERSIDAD FIDÉLITAS
+ UNIVERSIDAD FIDÉLITAS
+#
 
 **Curso: Estructura de Datos**
 
