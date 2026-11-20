@@ -96,7 +96,40 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 - ColaTiquetes: cola FIFO dinámica (frente y fin). Permite encolar, desencolar, ver el frente, verificar si está vacía y obtener su tamaño.
 - ColaPrioridad: cola de prioridad formada por varias ColaTiquetes. Atiende primero la prioridad médica más alta (Crítica, Alta, Media, Baja) a igual prioridad, los preferenciales antes que los normales y a igualdad total, por orden de llegada.
 - GestorTiquetes:  Paciente, Tiquete y las colas, con una cola por tipo de atención (Consulta, Sala y Emergencias). Registra pacientes y genera su tiquete (C-001, S-001, E-001), evita tiquetes pendientes duplicados, atiende al siguiente registrando la hora y permite consultar y listar los pendientes.
-- MenuTiquetes: menú para registrar pacientes, ver el siguiente, ver los pacientes en espera y atender, según el rol del usuario.
-- PruebaColasPrioridad: programa de pruebas (31 verificaciones) de las colas y del registro de pacientes.
+
+  <div align="center">
+
+# UNIVERSIDAD FIDÉLITAS
+
+**Curso: Estructura de Datos**
+
+# MEDIQUEUE
+
+### Sistema de Gestión Hospitalaria
+
+**AVANCE 2**
+
+---
+
+### INTEGRANTES
+
+| Nombre completo | Correo institucional |
+|---|---|
+| CASTILLO ARAGON MONSERRATH | mcastillo50644@ufide.ac.cr |
+| HERNANDEZ SEGNI JOSE DANIEL | hjose90991@ufide.ac.cr |
+| ALLISON EDELL ALEGRIA | aalegria50755@ufide.ac.cr |
+| RAMOS RODRIGUEZ DHAYAN JESUS | dramos30655@ufide.ac.cr |
+
+---
+
+**Profesor:** Kenneth Artavia A.
+
+**Costa Rica, 2026**
+
+</div>
+
+---
+
+Distribución del trabajo — Avance 2
 
 
