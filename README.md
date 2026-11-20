@@ -97,6 +97,7 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 - ColaPrioridad: cola de prioridad formada por varias ColaTiquetes. Atiende primero la prioridad médica más alta (Crítica, Alta, Media, Baja) a igual prioridad, los preferenciales antes que los normales y a igualdad total, por orden de llegada.
 - GestorTiquetes:  Paciente, Tiquete y las colas, con una cola por tipo de atención (Consulta, Sala y Emergencias). Registra pacientes y genera su tiquete (C-001, S-001, E-001), evita tiquetes pendientes duplicados, atiende al siguiente registrando la hora y permite consultar y listar los pendientes.
 
+#
 <div align="center">
 
 # UNIVERSIDAD FIDÉLITAS
