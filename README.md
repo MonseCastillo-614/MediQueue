@@ -98,6 +98,7 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 - GestorTiquetes:  Paciente, Tiquete y las colas, con una cola por tipo de atención (Consulta, Sala y Emergencias). Registra pacientes y genera su tiquete (C-001, S-001, E-001), evita tiquetes pendientes duplicados, atiende al siguiente registrando la hora y permite consultar y listar los pendientes.
 
 #
+
 <div align="center">
 
 # UNIVERSIDAD FIDÉLITAS
