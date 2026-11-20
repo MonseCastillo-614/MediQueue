@@ -1,30 +1,22 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package estructuras;
+
 import modelo.Tiquete;
 import java.util.NoSuchElementException;
-/**
- * 
- * 
- * @author aedgell555
- */
+
 public class ColaPrioridad {
 
-    private static final int NIVELES = 4;
-
-    private final ColaTiquetes[] colas = new ColaTiquetes[NIVELES * 2];
+    private NodoTiquete frente; // primer nodo
+    private NodoTiquete fin;    // ultimo nodo
     private int tamano;
 
     public ColaPrioridad() {
-        for (int i = 0; i < colas.length; i++) {
-            colas[i] = new ColaTiquetes();
-        }
+        this.frente = null;
+        this.fin = null;
         this.tamano = 0;
     }
 
-    private int indiceDe(Tiquete tiquete) {
+    // Calcula el valor de prioridad manteniendo tu lógica original: 
+    private int obtenerValorPrioridad(Tiquete tiquete) {
         int nivel = tiquete.obtenerNivelPrioridad();
         return (nivel - 1) * 2 + (tiquete.esPreferencial() ? 0 : 1);
     }
@@ -34,53 +26,85 @@ public class ColaPrioridad {
             throw new IllegalArgumentException("El tiquete no puede ser nulo.");
         }
 
-        colas[indiceDe(tiquete)].encolar(tiquete);
+        NodoTiquete nuevo = new NodoTiquete(tiquete);
+        int prioridadNuevo = obtenerValorPrioridad(tiquete);
+
+        
+        if (frente == null) {
+            frente = nuevo;
+            fin = nuevo;
+        } 
+        
+        else if (obtenerValorPrioridad(frente.getTiquete()) > prioridadNuevo) {
+            nuevo.setSiguiente(frente);
+            frente = nuevo;
+        } 
+        
+        else {
+            NodoTiquete actual = frente;
+            
+            
+            while (actual.getSiguiente() != null && 
+                   obtenerValorPrioridad(actual.getSiguiente().getTiquete()) <= prioridadNuevo) {
+                actual = actual.getSiguiente();
+            }
+            
+            // Insertamos el nuevo nodo justo después del nodo 
+            nuevo.setSiguiente(actual.getSiguiente());
+            actual.setSiguiente(nuevo);
+            
+            // Si el nodo se insertó en la última posición, actualizamos el puntero fin
+            if (nuevo.getSiguiente() == null) {
+                fin = nuevo;
+            }
+        }
         tamano++;
     }
 
     public Tiquete desencolar() {
-        for (ColaTiquetes cola : colas) {
-            if (!cola.estaVacia()) {
-                tamano--;
-                return cola.desencolar();
-            }
+        if (frente == null) {
+            throw new NoSuchElementException("La cola de prioridad esta vacia.");
         }
-        throw new NoSuchElementException("La cola de prioridad esta vacia.");
+
+        Tiquete tiquete = frente.getTiquete();
+        frente = frente.getSiguiente();
+
+        if (frente == null) {
+            fin = null; // Si la cola quedó vacía, el final también es nulo
+        }
+
+        tamano--;
+        return tiquete;
     }
 
     public Tiquete frente() {
-        for (ColaTiquetes cola : colas) {
-            if (!cola.estaVacia()) {
-                return cola.frente();
-            }
+        if (frente == null) {
+            throw new NoSuchElementException("La cola de prioridad esta vacia.");
         }
-        throw new NoSuchElementException("La cola de prioridad esta vacia.");
+        return frente.getTiquete();
     }
 
     public boolean estaVacia() {
-        return tamano == 0;
+        return frente == null;
     }
 
     public int tamano() {
         return tamano;
     }
 
-    // Devuelve los tiquetes en el orden de atencion sin modificar la cola.
     public Tiquete obtener(int posicion) {
         if (posicion < 0 || posicion >= tamano) {
-            throw new IndexOutOfBoundsException(
-                    "Posicion fuera de la cola: " + posicion);
+            throw new IndexOutOfBoundsException("Posicion fuera de la cola: " + posicion);
         }
 
-        int restante = posicion;
-        for (ColaTiquetes cola : colas) {
-            if (restante < cola.tamano()) {
-                return cola.obtener(restante);
-            }
-            restante -= cola.tamano();
+        NodoTiquete actual = frente;
+        int indice = 0;
+
+        while (indice < posicion) {
+            actual = actual.getSiguiente();
+            indice++;
         }
 
-        throw new IndexOutOfBoundsException(
-                "Posicion fuera de la cola: " + posicion);
+        return actual.getTiquete();
     }
 }
