@@ -135,5 +135,5 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 ---
 
 Distribución del trabajo — Avance 2
-hola
+
 
