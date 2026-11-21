@@ -1,12 +1,12 @@
 {
   "configuracion": {
-    "nombreSede": "Guanacaste",
-    "cantidadSalas": 1,
-    "cantidadConsultorios": 3,
-    "cantidadEmergencias": 7,
+    "nombreSede": "SJ",
+    "cantidadSalas": 5,
+    "cantidadConsultorios": 5,
+    "cantidadEmergencias": 5,
     "salaPreferencial": 1,
-    "consultorioPreferencial": 2,
-    "salaEmergenciaCritica": 5
+    "consultorioPreferencial": 3,
+    "salaEmergenciaCritica": 4
   },
   "usuarios": {
     "usuario": {
@@ -16,7 +16,7 @@
     },
     "siguiente": {
       "usuario": {
-        "nombreUsuario": "medico",
+        "nombreUsuario": "Jose",
         "contrasena": "1",
         "rol": "Medico"
       }

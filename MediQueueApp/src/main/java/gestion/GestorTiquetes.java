@@ -8,7 +8,6 @@ import estructuras.NodoTiquete;
 import estructuras.ColaPrioridad;
 import modelo.Tiquete;
 import modelo.Paciente;
-
 /**
  * 
  * 
@@ -105,6 +104,41 @@ public class GestorTiquetes {
         tiquete.registrarAtencion();
         agregarAtendido(tiquete);
         return tiquete;
+    }
+
+    // Retira un tiquete de las colas usando solamente los metodos
+    // que ya existen en ColaPrioridad: tamano, desencolar y encolar.
+    public boolean removerTiquete(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            return false;
+        }
+
+        boolean removido = removerDeCola(consultas, id.trim());
+        if (removido) return true;
+
+        removido = removerDeCola(salas, id.trim());
+        if (removido) return true;
+
+        return removerDeCola(emergencias, id.trim());
+    }
+
+    // Recorre la cola una vez. Los tiquetes que no coinciden se vuelven
+    // a encolar en el mismo orden de prioridad.
+    private boolean removerDeCola(ColaPrioridad cola, String id) {
+        boolean removido = false;
+        int cantidadInicial = cola.tamano();
+
+        for (int i = 0; i < cantidadInicial; i++) {
+            Tiquete actual = cola.desencolar();
+
+            if (!removido && actual.getId().equalsIgnoreCase(id)) {
+                removido = true;
+            } else {
+                cola.encolar(actual);
+            }
+        }
+
+        return removido;
     }
 
     // Muestra el siguiente tiquete sin quitarlo de la cola.
