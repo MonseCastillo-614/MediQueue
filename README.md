@@ -120,8 +120,6 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 | Nombre completo | Correo institucional |
 |---|---|
 | CASTILLO ARAGON MONSERRATH | mcastillo50644@ufide.ac.cr |
-| HERNANDEZ SEGNI JOSE DANIEL | hjose90991@ufide.ac.cr |
-| ALLISON EDELL ALEGRIA | aalegria50755@ufide.ac.cr |
 | RAMOS RODRIGUEZ DHAYAN JESUS | dramos30655@ufide.ac.cr |
 
 ---
