@@ -136,16 +136,64 @@ Distribución del trabajo — Avance 2
 
 Persona 1 y 2, mas la creación del Módulo 1.4: CASTILLO ARAGON MONSERRATH
 
-Responsabilidad: 
+Responsabilidad:
+- Desarrollar la estructura para administrar salas médicas y consultorios.
+- Vincularlos con la configuración de la sede.
+- Manejar disponibilidad, capacidad y ocupación.
+- Administrar los espacios preferenciales y la sala de emergencia crítica.
+- Implementar consultas de espacios disponibles.
+- Coordinar la asignación de espacios con el proceso de atención.
+- Implementar el almacenamiento de las atenciones en atendidos.json.
+- Implementar el almacenamiento del historial en historial.json.
+- Persistencia de las salas médicas y consultorios en salas.json.
+- Implementar la lectura y recuperación de los datos de salas, consultorios y atenciones al iniciar el sistema.
+- Integrar la persistencia con los módulos de atención médica y administración de espacios.
+- Validar el almacenamiento y la recuperación de los datos.
+- Crear el árbol binario de búsqueda.
+- Insertar y buscar pacientes por identificación.
+- Crear el índice centralizado de pacientes.
+- Implementar búsquedas de tiquetes e historiales.
+- Implementar búsquedas por médico, fecha y salón/consultorio.
+- Documentar los resultados de las búsquedas.
 
 Trabajo realizado:
 
-Persona 1 y 2, mas la creación del Módulo 1.5: RAMOS RODRIGUEZ DHAYAN JESUS
+Trabajé en el desarrollo e integración de la administración de salas médicas y consultorios, incluyendo el control de disponibilidad, capacidad, espacios preferenciales y emergencias críticas, así como la asignación de pacientes según el tipo de atención.
+
+También desarrollé la persistencia de datos mediante los archivos `atendidos.json`, `historial.json` y `salas.json`, implementando el almacenamiento y recuperación de la información al iniciar el sistema. Además, implementé la consulta y exportación de historiales clínicos y realicé pruebas para verificar la conservación de los datos.
+
+Por otra parte, desarrollé el módulo 1.4 mediante la implementación de árboles binarios de búsqueda (ABB), creando la estructura para insertar y buscar pacientes por identificación, así como un índice centralizado. También implementé búsquedas de tiquetes e historiales clínicos, por médico, fecha y salón o consultorio, integrando estas funcionalidades con la información existente en el sistema.
+
+Persona 3 y 4, mas la creación del Módulo 1.5: RAMOS RODRIGUEZ DHAYAN JESUS
 
 Responsabilidad: 
+
+- Desarrollar las estructuras de consultas y atenciones.
+- Vincular cada atención con el paciente y su tiquete.
+- Registrar el médico asignado.
+- Registrar diagnósticos, medicamentos, observaciones y procedimientos.
+- Registrar la sala o consultorio asignado.
+- Registrar el costo de la atención.
+- Coordinar la integración con pacientes, tiquetes y administración de espacios.
+- Desarrollar el flujo de atención y el historial clínico.
+- Implementar el inicio y la finalización de las atenciones.
+- Implementar la cancelación y el reingreso de pacientes.
+- Desarrollar la estructura del historial mediante una pila.
+- Registrar los movimientos de atención en el historial.
+- Permitir consultar los últimos registros del historial.
+- Coordinar la integración del proceso de atención con las colas y la asignación de salas.
+- Crear hospitales, clínicas y EBAIS.
+- Crear conexiones dirigidas entre sedes.
+- Asignar distancia, tiempo y costo a las conexiones.
+- Implementar listas de adyacencia.
+- Mostrar el grafo.
+- Implementar el algoritmo Dijkstra.
+- Guardar y cargar los datos desde grafo.json.
+
+Trabajo realizado:
+
 GestorAtenciones.java
 Esta clase tiene la responsabilidad de controlar el flujo de las citas médicas desde el momento en que inician hasta que finalizan por completo. Funciona como el motor principal para registrar la llegada de un paciente con su respectivo tiquete y asignarle un profesional de la salud en un espacio determinado. Durante el proceso de finalización de la consulta la clase calcula automáticamente los costos monetarios a cobrar según el tipo de servicio abarcando consultas generales, salas de atención o casos de emergencia. Un aspecto muy destacado es que se conecta a internet para buscar información real sobre los medicamentos recetados utilizando una base de datos externa. También permite actualizar el estado de las citas y registrar diagnósticos, observaciones o procedimientos médicos aplicados. Por último, se encarga de comunicarse con los archivos de persistencia para guardar y cargar toda la información de manera segura en el sistema
+
 GestorHistorialClinico.java
 Esta clase se encarga de administrar y almacenar todo el registro médico de los pacientes a lo largo del tiempo su función principal es llevar un control ordenado de cada visita que realiza una persona al centro medico para asegurar que los datos no se pierdan. Utiliza estructuras dinámicas enlazadas para agrupar el historial de todos los pacientes y apilar cada nuevo registro de forma secuencial. Permite buscar el expediente de una persona mediante su número de identificación para consultar o agregar nuevos diagnósticos a su archivo personal. Además de registrar nuevas atenciones y posibles cancelaciones el sistema facilita la lectura de los últimos movimientos clínicos de un individuo. También cuenta con la capacidad de generar un documento de texto exportable con el historial completo para guardarlo físicamente. Finalmente, el gestor valida si un paciente cumple con los requisitos necesarios para poder ingresar nuevamente a un salón de atención médica
-Trabajo realizado:
-
