@@ -134,13 +134,13 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 
 Distribución del trabajo — Avance 2
 
-Persona 1 y 2: CASTILLO ARAGON MONSERRATH
+Persona 1 y 2, mas la creación del Módulo 1.4: CASTILLO ARAGON MONSERRATH
 
 Responsabilidad: 
 
 Trabajo realizado:
 
-Persona 3 y 4: RAMOS RODRIGUEZ DHAYAN JESUS
+Persona 1 y 2, mas la creación del Módulo 1.5: RAMOS RODRIGUEZ DHAYAN JESUS
 
 Responsabilidad: 
 
