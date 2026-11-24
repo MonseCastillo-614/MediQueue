@@ -133,7 +133,19 @@ Implementé las colas dinámicas de prioridad y su integración con Paciente y T
 ---
 
 Distribución del trabajo — Avance 2
-Dahyan persona 3
+
+Persona 1 y 2: CASTILLO ARAGON MONSERRATH
+
+Responsabilidad: 
+
+Trabajo realizado:
+
+Persona 3 y 4: RAMOS RODRIGUEZ DHAYAN JESUS
+
+Responsabilidad: 
+
+Trabajo realizado:
+
 Esta clase tiene la responsabilidad de controlar el flujo de las citas médicas desde el momento en que inician hasta que finalizan por completo. Funciona como el motor principal para registrar la llegada de un paciente con su respectivo tiquete y asignarle un profesional de la salud en un espacio determinado. Durante el proceso de finalización de la consulta la clase calcula automáticamente los costos monetarios a cobrar según el tipo de servicio abarcando consultas generales, salas de atención o casos de emergencia. Un aspecto muy destacado es que se conecta a internet para buscar información real sobre los medicamentos recetados utilizando una base de datos externa. También permite actualizar el estado de las citas y registrar diagnósticos, observaciones o procedimientos médicos aplicados. Por último, se encarga de comunicarse con los archivos de persistencia para guardar y cargar toda la información de manera segura en el sistema
 Dahyan persona 4
 Esta clase se encarga de administrar y almacenar todo el registro médico de los pacientes a lo largo del tiempo su función principal es llevar un control ordenado de cada visita que realiza una persona al centro medico para asegurar que los datos no se pierdan. Utiliza estructuras dinámicas enlazadas para agrupar el historial de todos los pacientes y apilar cada nuevo registro de forma secuencial. Permite buscar el expediente de una persona mediante su número de identificación para consultar o agregar nuevos diagnósticos a su archivo personal. Además de registrar nuevas atenciones y posibles cancelaciones el sistema facilita la lectura de los últimos movimientos clínicos de un individuo. También cuenta con la capacidad de generar un documento de texto exportable con el historial completo para guardarlo físicamente. Finalmente, el gestor valida si un paciente cumple con los requisitos necesarios para poder ingresar nuevamente a un salón de atención médica
