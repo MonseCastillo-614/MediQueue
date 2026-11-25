@@ -5,10 +5,6 @@ import modelo.Atencion;
 import modelo.Tiquete;
 import persistencia.PersistenciaAtenciones;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Scanner;
-
 
 public class GestorAtenciones {
 
@@ -25,6 +21,7 @@ public class GestorAtenciones {
         if (persistencia == null) {
             throw new IllegalArgumentException("La persistencia de atenciones no puede ser nula.");
         }
+
         this.persistencia = persistencia;
         this.primero = null;
         cargarDatos();
@@ -36,38 +33,35 @@ public class GestorAtenciones {
         }
 
         Atencion nuevaAtencion = new Atencion(
-                tiquete, 
-                medicoAsignado, 
-                "Pendiente", 
-                "Pendiente", 
-                "Pendiente", 
-                "Pendiente", 
-                espacioAsignado, 
-                0.0, 
+                tiquete,
+                medicoAsignado,
+                "Pendiente",
+                "Pendiente",
+                "Pendiente",
+                "Pendiente",
+                espacioAsignado,
+                0.0,
                 Atencion.EN_ATENCION
         );
 
         agregarAlFinal(nuevaAtencion);
-        tiquete.registrarAtencion(); 
-        
+        tiquete.registrarAtencion();
+
         guardarDatos();
         return nuevaAtencion;
     }
 
-    public void finalizarAtencion(String idTiquete, String diagnostico, String nombreMedicamento, 
+    public void finalizarAtencion(String idTiquete, String diagnostico, String nombreMedicamento,
                                   String observaciones, String procedimientos) {
-        
+
         Atencion atencionActiva = buscarAtencionActivaPorTiquete(idTiquete);
-        
+
         if (atencionActiva == null) {
             throw new IllegalStateException("No se encontró una atención activa para el tiquete: " + idTiquete);
         }
 
-        // Consumo de la API OpenFDA para obtener los datos del medicamento
-        String infoMedicamento = obtenerInformacionMedicamentoFDA(nombreMedicamento);
-
         atencionActiva.setDiagnostico(diagnostico);
-        atencionActiva.setMedicamentos(infoMedicamento);
+        atencionActiva.setMedicamentos(nombreMedicamento);
         atencionActiva.setObservaciones(observaciones);
         atencionActiva.setProcedimientos(procedimientos);
         atencionActiva.setCosto(calcularCosto(atencionActiva.getTiquete()));
@@ -75,14 +69,14 @@ public class GestorAtenciones {
 
         guardarDatos();
     }
-    
+
     public void cancelarAtencion(String idTiquete) {
         Atencion atencionActiva = buscarAtencionActivaPorTiquete(idTiquete);
-        
+
         if (atencionActiva == null) {
             throw new IllegalStateException("No se encontró una atención activa para el tiquete: " + idTiquete);
         }
-        
+
         atencionActiva.setEstado(Atencion.CANCELADA);
         guardarDatos();
     }
@@ -113,28 +107,33 @@ public class GestorAtenciones {
 
     public Atencion buscarAtencionActivaPorTiquete(String idTiquete) {
         NodoAtencion actual = primero;
-        
+
         while (actual != null) {
             Atencion atencion = actual.getDato();
-            if (atencion.getTiquete().getId().equalsIgnoreCase(idTiquete) 
+
+            if (atencion.getTiquete().getId().equalsIgnoreCase(idTiquete)
                     && atencion.getEstado().equals(Atencion.EN_ATENCION)) {
                 return atencion;
             }
+
             actual = actual.getSiguiente();
         }
+
         return null;
     }
 
     private void agregarAlFinal(Atencion atencion) {
         NodoAtencion nuevo = new NodoAtencion(atencion);
-        
+
         if (primero == null) {
             primero = nuevo;
         } else {
             NodoAtencion actual = primero;
+
             while (actual.getSiguiente() != null) {
                 actual = actual.getSiguiente();
             }
+
             actual.setSiguiente(nuevo);
         }
     }
@@ -143,56 +142,7 @@ public class GestorAtenciones {
         return primero;
     }
 
-    // --- Consumo de API OpenFDA ---
-
-    private String obtenerInformacionMedicamentoFDA(String nombreMedicamento) {
-        String resultado = nombreMedicamento;
-        try {
-            String busqueda = nombreMedicamento.replace(" ", "+");
-            URL url = new URL("https://api.fda.gov/drug/label.json?search=openfda.brand_name:" + busqueda + "&limit=1");
-            HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
-            conexion.setRequestMethod("GET");
-            
-            if (conexion.getResponseCode() == 200) {
-                Scanner scannerUrl = new Scanner(url.openStream(), "UTF-8");
-                StringBuilder respuesta = new StringBuilder();
-                while (scannerUrl.hasNext()) {
-                    respuesta.append(scannerUrl.nextLine());
-                }
-                scannerUrl.close();
-                
-                String json = respuesta.toString();
-                
-                String indicaciones = extraerValorJson(json, "\"indications_and_usage\":[\"", "\"]");
-                
-                if (!indicaciones.isEmpty()) {
-                    resultado = nombreMedicamento + " - Uso recomendado: " + indicaciones;
-                } else {
-                    resultado = nombreMedicamento + " - (Aprobado, sin indicaciones extra)";
-                }
-            } else {
-                resultado = nombreMedicamento + " - (Medicamento no encontrado en FDA)";
-            }
-        } catch (Exception e) {
-            
-            resultado = nombreMedicamento + " - (Error de conexión API)";
-        }
-        return resultado;
-    }
-
-    private String extraerValorJson(String json, String claveInicio, String claveFin) {
-        int inicio = json.indexOf(claveInicio);
-        if (inicio != -1) {
-            inicio += claveInicio.length();
-            int fin = json.indexOf(claveFin, inicio);
-            if (fin != -1) {
-                return json.substring(inicio, fin).replace("\\n", " ").replace("\"", "'");
-            }
-        }
-        return "";
-    }
-
-    // --- Métodos de Persistencia ---
+    // Métodos de Persistencia
 
     private void cargarDatos() {
         try {
