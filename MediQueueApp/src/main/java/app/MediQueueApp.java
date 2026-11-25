@@ -3,6 +3,7 @@
  */
 package app;
 import gestion.GestorTiquetes;
+import gestion.GestorBusquedas;
 import persistencia.PersistenciaDatos;
 import persistencia.PersistenciaAtenciones;
 import persistencia.PersistenciaHistorial;
@@ -52,6 +53,9 @@ public class MediQueueApp {
 
     // Administra las colas de prioridad de los tiquetes pendientes.
     private static final GestorTiquetes gestorTiquetes = new GestorTiquetes();
+
+    // Administra el indice ABB y las busquedas del sistema.
+    private static GestorBusquedas gestorBusquedas = new GestorBusquedas();
 
     // Administra las salas medicas, salas de emergencia y consultorios.
     private static GestorSalas gestorSalas;
@@ -142,6 +146,13 @@ public class MediQueueApp {
         if (!cargarAtencionesEHistoriales()) {
             return;
         }
+
+        // Construye el indice ABB con los datos recuperados.
+        gestorBusquedas.cargarDatos(
+                primerPaciente,
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
 
         // Inicia sesion.
         Usuario usuarioIngresado = iniciarSesion(archivo);
@@ -538,6 +549,10 @@ public class MediQueueApp {
 
                 exportarHistorialPaciente();
 
+            } else if (opcion.equals("22")) {
+
+                consultarBusquedasABB();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -666,6 +681,7 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "19. Finalizar, cancelar o reingresar atencion", false);
         agregarOpcionMenu(opciones, "20. Consultar historial del paciente", false);
         agregarOpcionMenu(opciones, "21. Exportar historial completo", false);
+        agregarOpcionMenu(opciones, "22. Consultas y operaciones mediante ABB", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
         JPanel inferior = new JPanel(new java.awt.BorderLayout(0, 5));
@@ -1119,6 +1135,10 @@ public class MediQueueApp {
                 quitarUltimoPaciente();
                 return;
             }
+
+            // Agrega el paciente nuevo al indice ABB.
+            gestorBusquedas.insertarPaciente(paciente);
+
             JOptionPane.showMessageDialog(
                     null, "Paciente registrado correctamente.\n" + paciente);
         } catch (NumberFormatException ex) {
@@ -2295,4 +2315,197 @@ public class MediQueueApp {
             }
         }
     }
+
+    /**
+     * Menu de consultas y operaciones del Arbol Binario de Busqueda.
+     * Permite utilizar el indice ABB y consultar las estructuras existentes.
+     */
+    private static void consultarBusquedasABB() {
+
+        // Actualiza el gestor con los datos actuales del sistema.
+        gestorBusquedas.cargarDatos(
+                primerPaciente,
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
+
+        boolean continuar = true;
+
+        while (continuar) {
+
+            String opcion = JOptionPane.showInputDialog(
+                    null,
+                    "CONSULTAS Y OPERACIONES MEDIANTE ABB\n\n"
+                    + "1. Buscar paciente por identificacion\n"
+                    + "2. Buscar tiquete por ID\n"
+                    + "3. Consultar historial por identificacion\n"
+                    + "4. Buscar atenciones por medico\n"
+                    + "5. Buscar atenciones por fecha\n"
+                    + "6. Buscar atenciones por sala/consultorio\n"
+                    + "7. Recorrido inorden\n"
+                    + "8. Recorrido preorden\n"
+                    + "9. Recorrido postorden\n"
+                    + "10. Contar nodos\n"
+                    + "11. Consultar altura del arbol\n"
+                    + "12. Mostrar pacientes por nivel\n"
+                    + "13. Validar estructura ABB\n\n"
+                    + "0. Regresar al menu principal",
+                    "Arbol Binario de Busqueda",
+                    JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            String dato;
+            String resultado;
+            Paciente paciente;
+            Tiquete tiquete;
+
+            switch (opcion.trim()) {
+
+                case "1":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la identificacion del paciente:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+
+                    paciente = gestorBusquedas.buscarPaciente(dato.trim());
+                    if (paciente == null) {
+                        resultado = "No se encontro un paciente con esa identificacion.";
+                    } else {
+                        resultado = "PACIENTE ENCONTRADO MEDIANTE ABB\n\n"
+                                + paciente.toString();
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Busqueda de paciente", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "2":
+                    dato = JOptionPane.showInputDialog(null, "Ingrese el ID del tiquete:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+
+                    tiquete = gestorBusquedas.buscarTiquete(dato.trim());
+                    if (tiquete == null) {
+                        resultado = "No se encontro un tiquete con ese ID.";
+                    } else {
+                        resultado = "TIQUETE ENCONTRADO\n\n" + tiquete.toString();
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Busqueda de tiquete", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "3":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la identificacion del paciente:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.consultarHistorial(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Historial del paciente", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "4":
+                    dato = JOptionPane.showInputDialog(null, "Ingrese el nombre del medico:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorMedico(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por medico", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "5":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la fecha o parte de ella (AAAA-MM-DD):");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorFecha(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por fecha", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "6":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese el nombre de la sala o consultorio:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorEspacio(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por espacio", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "7":
+                    resultado = gestorBusquedas.listarPacientesInorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido inorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "8":
+                    resultado = gestorBusquedas.listarPacientesPreorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido preorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "9":
+                    resultado = gestorBusquedas.listarPacientesPostorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido postorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "10":
+                    JOptionPane.showMessageDialog(null,
+                            "Cantidad de nodos almacenados: "
+                            + gestorBusquedas.contarNodos(),
+                            "Conteo de nodos", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "11":
+                    JOptionPane.showMessageDialog(null,
+                            "Altura del arbol: " + gestorBusquedas.obtenerAltura()
+                            + "\n\nUn arbol vacio tiene altura -1.",
+                            "Altura del ABB", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "12":
+                    if (gestorBusquedas.contarNodos() == 0) {
+                        JOptionPane.showMessageDialog(null, "El arbol esta vacio.");
+                        break;
+                    }
+                    dato = JOptionPane.showInputDialog(null,
+                            "Ingrese el nivel que desea consultar.\n"
+                            + "La raiz se encuentra en el nivel 0.\n"
+                            + "Altura actual: " + gestorBusquedas.obtenerAltura());
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    try {
+                        int nivel = Integer.parseInt(dato.trim());
+                        if (nivel < 0 || nivel > gestorBusquedas.obtenerAltura()) {
+                            JOptionPane.showMessageDialog(null,
+                                    "Ingrese un nivel entre 0 y "
+                                    + gestorBusquedas.obtenerAltura());
+                            break;
+                        }
+                        resultado = gestorBusquedas.mostrarNivel(nivel);
+                        JOptionPane.showMessageDialog(null, resultado,
+                                "Pacientes por nivel", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(null,
+                                "Debe ingresar un numero entero.");
+                    }
+                    break;
+
+                case "13":
+                    if (gestorBusquedas.validarArbolABB()) {
+                        resultado = "El arbol cumple las reglas de un "
+                                + "Arbol Binario de Busqueda (ABB).";
+                    } else {
+                        resultado = "El arbol no cumple las reglas de un ABB.";
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Validacion del ABB", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                default:
+                    JOptionPane.showMessageDialog(null, "Seleccione una opcion valida.");
+                    break;
+            }
+        }
+    }
+
+
 }
