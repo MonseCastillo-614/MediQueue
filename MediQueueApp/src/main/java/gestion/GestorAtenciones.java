@@ -5,17 +5,16 @@ import modelo.Atencion;
 import modelo.Tiquete;
 import persistencia.PersistenciaAtenciones;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Scanner;
-
 
 public class GestorAtenciones {
 
     private NodoAtencion primero;
     private final PersistenciaAtenciones persistencia;
+    
+    // Instancia del nuevo servicio (ya no necesita import porque está en el mismo paquete)
+    private final OpenFdaService fdaService;
 
-    // Precios base sugeridos para el cálculo de costos
+    // Precios base sugeridos
     private static final double COSTO_CONSULTA = 15000.0;
     private static final double COSTO_SALA = 25000.0;
     private static final double COSTO_EMERGENCIA = 50000.0;
@@ -27,6 +26,10 @@ public class GestorAtenciones {
         }
         this.persistencia = persistencia;
         this.primero = null;
+        
+        // Inicializamos el servicio de FDA
+        this.fdaService = new OpenFdaService();
+        
         cargarDatos();
     }
 
@@ -36,20 +39,12 @@ public class GestorAtenciones {
         }
 
         Atencion nuevaAtencion = new Atencion(
-                tiquete, 
-                medicoAsignado, 
-                "Pendiente", 
-                "Pendiente", 
-                "Pendiente", 
-                "Pendiente", 
-                espacioAsignado, 
-                0.0, 
-                Atencion.EN_ATENCION
+                tiquete, medicoAsignado, "Pendiente", "Pendiente", 
+                "Pendiente", "Pendiente", espacioAsignado, 0.0, Atencion.EN_ATENCION
         );
 
         agregarAlFinal(nuevaAtencion);
         tiquete.registrarAtencion(); 
-        
         guardarDatos();
         return nuevaAtencion;
     }
@@ -63,8 +58,15 @@ public class GestorAtenciones {
             throw new IllegalStateException("No se encontró una atención activa para el tiquete: " + idTiquete);
         }
 
-        // Consumo de la API OpenFDA para obtener los datos del medicamento
-        String infoMedicamento = obtenerInformacionMedicamentoFDA(nombreMedicamento);
+        // Llamada limpia al servicio web externo (está en el mismo paquete)
+        Medicamento med = fdaService.consultarMedicamento(nombreMedicamento);
+        String infoMedicamento;
+        
+        if (med != null) {
+            infoMedicamento = med.getNombre() + " - Uso recomendado: " + med.getUsoRecomendado();
+        } else {
+            infoMedicamento = nombreMedicamento + " - (Medicamento no encontrado o error de red)";
+        }
 
         atencionActiva.setDiagnostico(diagnostico);
         atencionActiva.setMedicamentos(infoMedicamento);
@@ -78,42 +80,29 @@ public class GestorAtenciones {
     
     public void cancelarAtencion(String idTiquete) {
         Atencion atencionActiva = buscarAtencionActivaPorTiquete(idTiquete);
-        
         if (atencionActiva == null) {
             throw new IllegalStateException("No se encontró una atención activa para el tiquete: " + idTiquete);
         }
-        
         atencionActiva.setEstado(Atencion.CANCELADA);
         guardarDatos();
     }
 
     private double calcularCosto(Tiquete tiquete) {
         double costoBase = 0.0;
-
         switch (tiquete.getTipoAtencion()) {
-            case Tiquete.TIPO_CONSULTA:
-                costoBase = COSTO_CONSULTA;
-                break;
-            case Tiquete.TIPO_SALA:
-                costoBase = COSTO_SALA;
-                break;
-            case Tiquete.TIPO_EMERGENCIA:
-                costoBase = COSTO_EMERGENCIA;
-                break;
-            default:
-                costoBase = COSTO_CONSULTA;
+            case Tiquete.TIPO_CONSULTA: costoBase = COSTO_CONSULTA; break;
+            case Tiquete.TIPO_SALA: costoBase = COSTO_SALA; break;
+            case Tiquete.TIPO_EMERGENCIA: costoBase = COSTO_EMERGENCIA; break;
+            default: costoBase = COSTO_CONSULTA;
         }
-
         if (tiquete.esPreferencial()) {
             costoBase += RECARGO_PREFERENCIAL;
         }
-
         return costoBase;
     }
 
     public Atencion buscarAtencionActivaPorTiquete(String idTiquete) {
         NodoAtencion actual = primero;
-        
         while (actual != null) {
             Atencion atencion = actual.getDato();
             if (atencion.getTiquete().getId().equalsIgnoreCase(idTiquete) 
@@ -127,7 +116,6 @@ public class GestorAtenciones {
 
     private void agregarAlFinal(Atencion atencion) {
         NodoAtencion nuevo = new NodoAtencion(atencion);
-        
         if (primero == null) {
             primero = nuevo;
         } else {
@@ -139,60 +127,7 @@ public class GestorAtenciones {
         }
     }
 
-    public NodoAtencion getPrimero() {
-        return primero;
-    }
-
-    // --- Consumo de API OpenFDA ---
-
-    private String obtenerInformacionMedicamentoFDA(String nombreMedicamento) {
-        String resultado = nombreMedicamento;
-        try {
-            String busqueda = nombreMedicamento.replace(" ", "+");
-            URL url = new URL("https://api.fda.gov/drug/label.json?search=openfda.brand_name:" + busqueda + "&limit=1");
-            HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
-            conexion.setRequestMethod("GET");
-            
-            if (conexion.getResponseCode() == 200) {
-                Scanner scannerUrl = new Scanner(url.openStream(), "UTF-8");
-                StringBuilder respuesta = new StringBuilder();
-                while (scannerUrl.hasNext()) {
-                    respuesta.append(scannerUrl.nextLine());
-                }
-                scannerUrl.close();
-                
-                String json = respuesta.toString();
-                
-                String indicaciones = extraerValorJson(json, "\"indications_and_usage\":[\"", "\"]");
-                
-                if (!indicaciones.isEmpty()) {
-                    resultado = nombreMedicamento + " - Uso recomendado: " + indicaciones;
-                } else {
-                    resultado = nombreMedicamento + " - (Aprobado, sin indicaciones extra)";
-                }
-            } else {
-                resultado = nombreMedicamento + " - (Medicamento no encontrado en FDA)";
-            }
-        } catch (Exception e) {
-            
-            resultado = nombreMedicamento + " - (Error de conexión API)";
-        }
-        return resultado;
-    }
-
-    private String extraerValorJson(String json, String claveInicio, String claveFin) {
-        int inicio = json.indexOf(claveInicio);
-        if (inicio != -1) {
-            inicio += claveInicio.length();
-            int fin = json.indexOf(claveFin, inicio);
-            if (fin != -1) {
-                return json.substring(inicio, fin).replace("\\n", " ").replace("\"", "'");
-            }
-        }
-        return "";
-    }
-
-    // --- Métodos de Persistencia ---
+    public NodoAtencion getPrimero() { return primero; }
 
     private void cargarDatos() {
         try {
