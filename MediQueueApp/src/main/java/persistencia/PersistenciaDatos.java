@@ -206,7 +206,31 @@ public final class PersistenciaDatos {
 
         guardarSalas(convertir(salas, adaptador));
     }
+// ================= GRAFO DE SEDES =================
 
+public String cargarGrafo() throws IOException {
+    return leer("grafo.json");
+}
+
+public void guardarGrafo(String json) throws IOException {
+    escribir("grafo.json", json);
+}
+
+public <T> T cargarGrafo(
+        AdaptadorJson<T> adaptador) throws IOException {
+
+    return reconstruir(
+            cargarGrafo(),
+            adaptador,
+            "grafo.json");
+}
+
+public <T> void guardarGrafo(
+        T grafo,
+        AdaptadorJson<T> adaptador) throws IOException {
+
+    guardarGrafo(convertir(grafo, adaptador));
+}
     // ================= LECTURA Y ESCRITURA =================
 
     // Lee un archivo existente y valida su contenido.
