@@ -158,11 +158,31 @@ Responsabilidad:
 
 Trabajo realizado:
 
-Trabajé en el desarrollo e integración de la administración de salas médicas y consultorios, incluyendo el control de disponibilidad, capacidad, espacios preferenciales y emergencias críticas, así como la asignación de pacientes según el tipo de atención.
+Durante el desarrollo del Avance 2, trabajé en la implementación e integración de los módulos correspondientes a la administración de salas médicas y consultorios, la persistencia de datos y el Módulo 1.4: Historial y búsquedas mediante árboles binarios de búsqueda (ABB).
 
-También desarrollé la persistencia de datos mediante los archivos `atendidos.json`, `historial.json` y `salas.json`, implementando el almacenamiento y recuperación de la información al iniciar el sistema. Además, implementé la consulta y exportación de historiales clínicos y realicé pruebas para verificar la conservación de los datos.
+Administración de salas médicas y consultorios
 
-Por otra parte, desarrollé el módulo 1.4 mediante la implementación de árboles binarios de búsqueda (ABB), creando la estructura para insertar y buscar pacientes por identificación, así como un índice centralizado. También implementé búsquedas de tiquetes e historiales clínicos, por médico, fecha y salón o consultorio, integrando estas funcionalidades con la información existente en el sistema.
+Desarrollé la estructura para administrar las salas médicas y los consultorios, vinculándolos con la configuración de la sede. Implementé el control de disponibilidad, capacidad y ocupación de los espacios, considerando también la administración de espacios preferenciales y la sala destinada a emergencias críticas.
+
+Además, trabajé en las consultas de espacios disponibles y en la coordinación de la asignación de pacientes según el tipo de atención requerido, integrando estas funcionalidades con el proceso de atención médica.
+
+Persistencia de datos
+
+Implementé la persistencia de la información del sistema mediante los archivos atendidos.json, historial.json y salas.json. Esto contempla el almacenamiento de las atenciones, los historiales clínicos y la información correspondiente a las salas médicas y consultorios.
+
+También desarrollé los procesos de lectura y recuperación de los datos al iniciar el sistema, permitiendo conservar la información registrada entre ejecuciones. Realicé pruebas para verificar el almacenamiento y la recuperación de los datos, así como la integración de la persistencia con los módulos de atención médica y administración de espacios.
+
+Adicionalmente, implementé las funcionalidades de consulta y exportación de historiales clínicos.
+
+Módulo 1.4: Historial y búsquedas mediante árboles ABB
+
+Desarrollé el Módulo 1.4 mediante la implementación de un Árbol Binario de Búsqueda (ABB), utilizando la identificación de los pacientes como criterio de organización. Para ello, creé las clases NodoABB y ArbolABB, además del gestor GestorBusquedas, encargado de centralizar las consultas.
+
+Implementé la construcción del índice de pacientes a partir de la información existente en el sistema, así como la inserción y búsqueda de pacientes por identificación. También incorporé las búsquedas de tiquetes, historiales clínicos y atenciones por médico, fecha y salón o consultorio.
+
+Como complemento, desarrollé las operaciones del árbol estudiadas en clase, incluyendo los recorridos inorden, preorden y postorden, el conteo de nodos, el cálculo de altura, la impresión de nodos por niveles y la validación de la estructura ABB.
+
+Finalmente, integré estas funcionalidades en el menú principal de MediQueue mediante una opción de consultas ABB y realicé pruebas funcionales para verificar la búsqueda de pacientes, la recuperación de información, los recorridos y las operaciones del árbol.
 
 Persona 3 y 4, mas la creación del Módulo 1.5: RAMOS RODRIGUEZ DHAYAN JESUS
 
