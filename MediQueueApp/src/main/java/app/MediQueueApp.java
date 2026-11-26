@@ -4,14 +4,18 @@
 package app;
 import gestion.GestorTiquetes;
 import gestion.GestorBusquedas;
+import gestion.GestorAtenciones;
+import gestion.GestorHistorialClinico;
 import persistencia.PersistenciaDatos;
 import persistencia.PersistenciaAtenciones;
 import persistencia.PersistenciaHistorial;
 import persistencia.PersistenciaSalas;
+import persistencia.PersistenciaGrafo;
 import estructuras.NodoAtencion;
 import estructuras.NodoHistorialPaciente;
 import estructuras.NodoPila;
 import estructuras.ColaTiquetes;
+import estructuras.GrafoSedes;
 import persistencia.LectorJson;
 import persistencia.JsonValor;
 import persistencia.EscritorJson;
@@ -24,6 +28,7 @@ import modelo.Paciente;
 import modelo.Atencion;
 import modelo.HistorialPaciente;
 import modelo.RegistroHistorial;
+import modelo.Sede;
 import salas.GestorSalas;
 import salas.Sala;
 import salas.Consultorio;
@@ -39,6 +44,7 @@ import javax.swing.JTextField;
 import java.awt.GridLayout;
 import javax.swing.BoxLayout;
 import javax.swing.JPasswordField;
+
 /**
  *
  * @author casti
@@ -73,9 +79,17 @@ public class MediQueueApp {
     private static final PersistenciaSalas persistenciaSalas =
             new PersistenciaSalas(persistenciaDatos);
 
+    private static final PersistenciaGrafo persistenciaGrafo =
+            new PersistenciaGrafo(persistenciaDatos);
+
     // Listas enlazadas recuperadas desde los archivos JSON.
     private static NodoAtencion primerAtencion;
     private static NodoHistorialPaciente primerHistorial;
+
+    // GESTORES INTEGRADOS NUEVOS
+    private static GrafoSedes grafoSedes;
+    private static GestorAtenciones gestorAtencionesAvanzado;
+    private static GestorHistorialClinico gestorHistorialAvanzado = new GestorHistorialClinico();
 
     // Adaptador para guardar y recuperar pacientes.
     private static final AdaptadorJson<Paciente> ADAPTADOR_PACIENTES =
@@ -146,6 +160,14 @@ public class MediQueueApp {
         if (!cargarAtencionesEHistoriales()) {
             return;
         }
+
+        // Carga el grafo de sedes y los gestores nuevos
+        try {
+            grafoSedes = persistenciaGrafo.cargar();
+        } catch (IOException e) {
+            grafoSedes = new GrafoSedes();
+        }
+        gestorAtencionesAvanzado = new GestorAtenciones(persistenciaAtenciones);
 
         // Construye el indice ABB con los datos recuperados.
         gestorBusquedas.cargarDatos(
@@ -553,6 +575,18 @@ public class MediQueueApp {
 
                 consultarBusquedasABB();
 
+            } else if (opcion.equals("23")) {
+
+                menuGrafosSedes();
+
+            } else if (opcion.equals("24")) {
+
+                menuGestorAtencionesAvanzado();
+
+            } else if (opcion.equals("25")) {
+
+                menuGestorHistorialAvanzado();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -682,6 +716,12 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "20. Consultar historial del paciente", false);
         agregarOpcionMenu(opciones, "21. Exportar historial completo", false);
         agregarOpcionMenu(opciones, "22. Consultas y operaciones mediante ABB", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
+
+        agregarOpcionMenu(opciones, "MÓDULOS AVANZADOS (INTEGRACIÓN)", true);
+        agregarOpcionMenu(opciones, "23. Gestionar Sedes y Conexiones (Grafos)", false);
+        agregarOpcionMenu(opciones, "24. Gestor de Atenciones Avanzado (OpenFDA)", false);
+        agregarOpcionMenu(opciones, "25. Gestor de Historial Avanzado (Pilas)", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
         JPanel inferior = new JPanel(new java.awt.BorderLayout(0, 5));
@@ -2507,5 +2547,191 @@ public class MediQueueApp {
         }
     }
 
+    // =========================================================================
+    // NUEVOS SUBMENÚS DE INTEGRACIÓN A GESTORES AVANZADOS
+    // =========================================================================
 
+    // Integración Módulo 1.5 - Grafos de Sedes
+    private static void menuGrafosSedes() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTIÓN DE SEDES Y RUTAS (GRAFOS) ---\n\n"
+                    + "1. Registrar nueva sede\n"
+                    + "2. Agregar conexión (ruta entre sedes)\n"
+                    + "3. Ver el grafo completo de sedes\n"
+                    + "4. Buscar ruta óptima (Algoritmo de Dijkstra)\n"
+                    + "5. Guardar grafo en archivo JSON\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Módulo de Grafos", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                switch (opcion.trim()) {
+                    case "1":
+                        String id = JOptionPane.showInputDialog("ID de la sede (ej. S1):");
+                        String nombre = JOptionPane.showInputDialog("Nombre de la sede:");
+                        String[] tipos = {"Hospital", "Clinica", "EBAIS"};
+                        String tipo = (String) JOptionPane.showInputDialog(null, "Seleccione el tipo:", 
+                                "Tipo", JOptionPane.QUESTION_MESSAGE, null, tipos, tipos[0]);
+                        
+                        if (id != null && nombre != null && tipo != null) {
+                            grafoSedes.agregarSede(new Sede(id, nombre, tipo));
+                            persistenciaGrafo.guardar(grafoSedes);
+                            JOptionPane.showMessageDialog(null, "Sede agregada correctamente.");
+                        }
+                        break;
+                    case "2":
+                        String origen = JOptionPane.showInputDialog("ID de la sede ORIGEN:");
+                        String destino = JOptionPane.showInputDialog("ID de la sede DESTINO:");
+                        double distancia = Double.parseDouble(JOptionPane.showInputDialog("Distancia:"));
+                        double tiempo = Double.parseDouble(JOptionPane.showInputDialog("Tiempo:"));
+                        double costo = Double.parseDouble(JOptionPane.showInputDialog("Costo:"));
+                        
+                        grafoSedes.agregarConexion(origen, destino, distancia, tiempo, costo);
+                        persistenciaGrafo.guardar(grafoSedes);
+                        JOptionPane.showMessageDialog(null, "Conexión creada correctamente.");
+                        break;
+                    case "3":
+                        JOptionPane.showMessageDialog(null, grafoSedes.mostrarGrafo(), "Grafo de Sedes", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "4":
+                        String o = JOptionPane.showInputDialog("ID de la sede ORIGEN:");
+                        String d = JOptionPane.showInputDialog("ID de la sede DESTINO:");
+                        String[] criterios = {"DISTANCIA", "TIEMPO", "COSTO"};
+                        String criterio = (String) JOptionPane.showInputDialog(null, "Criterio de búsqueda:", 
+                                "Dijkstra", JOptionPane.QUESTION_MESSAGE, null, criterios, criterios[0]);
+                        
+                        if (o != null && d != null && criterio != null) {
+                            String ruta = grafoSedes.dijkstra(o, d, criterio);
+                            JOptionPane.showMessageDialog(null, ruta, "Ruta Óptima", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                        break;
+                    case "5":
+                        persistenciaGrafo.guardar(grafoSedes);
+                        JOptionPane.showMessageDialog(null, "Grafo guardado en JSON con éxito.");
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Integración - Gestor de Atenciones Avanzado (con OpenFDA)
+    private static void menuGestorAtencionesAvanzado() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTOR DE ATENCIONES (AVANZADO API FDA) ---\n\n"
+                    + "1. Registrar nueva atención\n"
+                    + "2. Finalizar atención y validar medicamento (API OpenFDA)\n"
+                    + "3. Cancelar atención\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Gestor Atenciones", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                switch (opcion.trim()) {
+                    case "1":
+                        String idTiquete = JOptionPane.showInputDialog("Ingrese el ID del tiquete:");
+                        Tiquete tiquete = buscarTiquetePorId(idTiquete);
+                        if (tiquete != null) {
+                            String medico = JOptionPane.showInputDialog("Médico Asignado:");
+                            String espacio = JOptionPane.showInputDialog("Espacio Asignado:");
+                            gestorAtencionesAvanzado.registrarNuevaAtencion(tiquete, medico, espacio);
+                            JOptionPane.showMessageDialog(null, "Atención registrada mediante el Gestor Avanzado.");
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Tiquete no encontrado.");
+                        }
+                        break;
+                    case "2":
+                        String idTq = JOptionPane.showInputDialog("Ingrese el ID del tiquete de la atención activa:");
+                        String diag = JOptionPane.showInputDialog("Diagnóstico:");
+                        String med = JOptionPane.showInputDialog("Nombre del Medicamento a buscar en FDA (ej. Aspirin):");
+                        String obs = JOptionPane.showInputDialog("Observaciones:");
+                        String proc = JOptionPane.showInputDialog("Procedimientos:");
+                        
+                        JOptionPane.showMessageDialog(null, "Consultando a la FDA, por favor espere...");
+                        gestorAtencionesAvanzado.finalizarAtencion(idTq, diag, med, obs, proc);
+                        JOptionPane.showMessageDialog(null, "Atención finalizada. Medicamento validado y guardado.");
+                        break;
+                    case "3":
+                        String idCanc = JOptionPane.showInputDialog("Ingrese el ID del tiquete a cancelar:");
+                        gestorAtencionesAvanzado.cancelarAtencion(idCanc);
+                        JOptionPane.showMessageDialog(null, "Atención cancelada.");
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Integración - Gestor de Historial Clínico Avanzado (Pilas)
+    private static void menuGestorHistorialAvanzado() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTOR DE HISTORIAL CLÍNICO (PILAS) ---\n\n"
+                    + "1. Ver últimos N registros del paciente\n"
+                    + "2. Ver historial completo del paciente\n"
+                    + "3. Exportar historial físico (TXT)\n"
+                    + "4. Verificar si paciente puede reingresar a salón\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Gestor Historial", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                String idPac;
+                switch (opcion.trim()) {
+                    case "1":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        int n = Integer.parseInt(JOptionPane.showInputDialog("¿Cuántos registros recientes desea ver?"));
+                        String ultimos = gestorHistorialAvanzado.mostrarUltimosRegistros(idPac, n);
+                        JOptionPane.showMessageDialog(null, ultimos, "Últimos Registros", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "2":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        String completo = gestorHistorialAvanzado.obtenerHistorialCompleto(idPac);
+                        JOptionPane.showMessageDialog(null, completo, "Historial Completo", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "3":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente para exportar:");
+                        gestorHistorialAvanzado.exportarHistorialFisico(idPac);
+                        JOptionPane.showMessageDialog(null, "Historial exportado correctamente.");
+                        break;
+                    case "4":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        boolean puede = gestorHistorialAvanzado.puedeReingresarASalon(idPac);
+                        JOptionPane.showMessageDialog(null, puede ? "El paciente SÍ puede reingresar." : "El paciente NO puede reingresar.", 
+                                "Verificación de Reingreso", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
 }
