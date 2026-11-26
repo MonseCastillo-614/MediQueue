@@ -11,7 +11,7 @@ public class GestorAtenciones {
     private NodoAtencion primero;
     private final PersistenciaAtenciones persistencia;
     
-    // Instancia del nuevo servicio (ya no necesita import porque está en el mismo paquete)
+    
     private final OpenFdaService fdaService;
 
     // Precios base sugeridos
@@ -58,7 +58,7 @@ public class GestorAtenciones {
             throw new IllegalStateException("No se encontró una atención activa para el tiquete: " + idTiquete);
         }
 
-        // Llamada limpia al servicio web externo (está en el mismo paquete)
+        
         Medicamento med = fdaService.consultarMedicamento(nombreMedicamento);
         String infoMedicamento;
         
