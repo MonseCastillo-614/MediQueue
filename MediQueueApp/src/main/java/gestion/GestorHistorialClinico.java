@@ -1,3 +1,4 @@
+
 package gestion;
 
 import modelo.Atencion;
@@ -7,7 +8,6 @@ import estructuras.NodoHistorialPaciente;
 import estructuras.NodoPila;
 import java.io.FileWriter;
 import java.io.IOException;
-
 
 public class GestorHistorialClinico {
 
@@ -168,16 +168,17 @@ public class GestorHistorialClinico {
     // --- Métodos para manejar la lista de historiales ---
 
     private HistorialPaciente buscarHistorial(String identificacion) {
-    NodoHistorialPaciente actual = inicioHistoriales;
-    while (actual != null) {
-        
-        if (actual.getDato().getIdentificacion().equalsIgnoreCase(identificacion)) {
-            return actual.getDato();
+        NodoHistorialPaciente actual = inicioHistoriales;
+        while (actual != null) {
+            
+            if (actual.getDato().getIdentificacion().equalsIgnoreCase(identificacion)) {
+                return actual.getDato();
+            }
+            actual = actual.getSiguiente();
         }
-        actual = actual.getSiguiente();
+        return null;
     }
-    return null;
-}
+
     private HistorialPaciente buscarOCrearHistorial(String identificacion) {
         HistorialPaciente encontrado = buscarHistorial(identificacion);
         if (encontrado != null) {
@@ -195,5 +196,15 @@ public class GestorHistorialClinico {
         }
 
         return nuevoHistorial;
+    }
+
+    // --- MÉTODOS AÑADIDOS PARA SINCRONIZAR LA PERSISTENCIA JSON ---
+
+    public void setInicioHistoriales(NodoHistorialPaciente inicio) {
+        this.inicioHistoriales = inicio;
+    }
+
+    public NodoHistorialPaciente getInicioHistoriales() {
+        return this.inicioHistoriales;
     }
 }
