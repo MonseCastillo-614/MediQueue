@@ -3,6 +3,7 @@
  */
 package app;
 import gestion.GestorTiquetes;
+import gestion.GestorPacientes;
 import gestion.GestorBusquedas;
 import gestion.GestorAtenciones;
 import gestion.GestorHistorialClinico;
@@ -44,7 +45,6 @@ import javax.swing.JTextField;
 import java.awt.GridLayout;
 import javax.swing.BoxLayout;
 import javax.swing.JPasswordField;
-
 /**
  *
  * @author casti
@@ -52,8 +52,7 @@ import javax.swing.JPasswordField;
 public class MediQueueApp {
 
     // Registros guardados en listas enlazadas.
-    private static Paciente primerPaciente;
-    private static Paciente ultimoPaciente;
+    private static GestorPacientes gestorPacientes;
     private static Tiquete primerTiquete;
     private static Tiquete ultimoTiquete;
 
@@ -121,6 +120,8 @@ public class MediQueueApp {
 
     public static void main(String[] args) {
 
+        gestorPacientes = new GestorPacientes(persistenciaDatos, ADAPTADOR_PACIENTES);
+
         ArchivoConfiguracion archivo = new ArchivoConfiguracion();
 
         // Carga la configuracion.
@@ -167,11 +168,11 @@ public class MediQueueApp {
         } catch (IOException e) {
             grafoSedes = new GrafoSedes();
         }
-        gestorAtencionesAvanzado = new GestorAtenciones(persistenciaAtenciones);
+        gestorAtencionesAvanzado = new GestorAtenciones(persistenciaAtenciones, primerAtencion);
 
         // Construye el indice ABB con los datos recuperados.
         gestorBusquedas.cargarDatos(
-                primerPaciente,
+                gestorPacientes.getPrimerPaciente(),
                 primerTiquete,
                 primerAtencion,
                 primerHistorial);
@@ -610,8 +611,7 @@ public class MediQueueApp {
                             // Se elimina tambien el archivo de pacientes.
                             
                             persistenciaDatos.eliminarPacientes();
-                            primerPaciente = null;
-                            ultimoPaciente = null;
+                            gestorPacientes.limpiarPacientes();
                             primerTiquete = null;
                             ultimoTiquete = null;
 
@@ -748,8 +748,7 @@ public class MediQueueApp {
     // Carga los pacientes primero para poder enlazarlos con sus tiquetes.
     private static boolean cargarDatosPersistentes() {
         try {
-            primerPaciente = persistenciaDatos.cargarPacientes(ADAPTADOR_PACIENTES);
-            ultimoPaciente = obtenerUltimoPaciente(primerPaciente);
+            gestorPacientes.cargarPacientes();
 
             primerTiquete = persistenciaDatos.cargarTiquetes(ADAPTADOR_TIQUETES);
             ultimoTiquete = obtenerUltimoTiquete(primerTiquete);
@@ -779,7 +778,7 @@ public class MediQueueApp {
 
     private static boolean guardarPacientes() {
         try {
-            persistenciaDatos.guardarPacientes(primerPaciente, ADAPTADOR_PACIENTES);
+            gestorPacientes.guardarPacientes();
             return true;
         } catch (IOException | RuntimeException ex) {
             JOptionPane.showMessageDialog(
@@ -821,6 +820,10 @@ public class MediQueueApp {
         try {
             primerAtencion = persistenciaAtenciones.cargar();
             primerHistorial = persistenciaHistorial.cargar();
+
+            // Sincroniza el gestor avanzado con los historiales recuperados.
+            gestorHistorialAvanzado.setInicioHistoriales(primerHistorial);
+
             enlazarAtencionesConTiquetesRegistrados();
             return true;
         } catch (IOException | RuntimeException ex) {
@@ -1023,36 +1026,11 @@ public class MediQueueApp {
     }
 
     private static Paciente buscarPacientePorIdentificacion(String identificacion) {
-        Paciente actual = primerPaciente;
-        while (actual != null) {
-            if (actual.getIdentificacion().equalsIgnoreCase(identificacion)) {
-                return actual;
-            }
-            actual = actual.getSiguientePaciente();
-        }
-        return null;
+        return gestorPacientes.buscarPorIdentificacion(identificacion);
     }
 
     private static Paciente buscarPacientePorIndice(int indice) {
-        Paciente actual = primerPaciente;
-        int posicion = 0;
-        while (actual != null) {
-            if (posicion == indice) {
-                return actual;
-            }
-            posicion++;
-            actual = actual.getSiguientePaciente();
-        }
-        return null;
-    }
-
-    private static Paciente obtenerUltimoPaciente(Paciente primero) {
-        Paciente actual = primero;
-        if (actual == null) return null;
-        while (actual.getSiguientePaciente() != null) {
-            actual = actual.getSiguientePaciente();
-        }
-        return actual;
+        return gestorPacientes.buscarPorIndice(indice);
     }
 
     private static Tiquete obtenerUltimoTiquete(Tiquete primero) {
@@ -1072,31 +1050,6 @@ public class MediQueueApp {
             actual = actual.getSiguienteRegistro();
         }
         return cantidad;
-    }
-
-    private static void agregarPaciente(Paciente paciente) {
-        paciente.setSiguientePaciente(null);
-        if (primerPaciente == null) {
-            primerPaciente = paciente;
-        } else {
-            ultimoPaciente.setSiguientePaciente(paciente);
-        }
-        ultimoPaciente = paciente;
-    }
-
-    private static void quitarUltimoPaciente() {
-        if (primerPaciente == null) return;
-        if (primerPaciente == ultimoPaciente) {
-            primerPaciente = null;
-            ultimoPaciente = null;
-            return;
-        }
-        Paciente actual = primerPaciente;
-        while (actual.getSiguientePaciente() != ultimoPaciente) {
-            actual = actual.getSiguientePaciente();
-        }
-        actual.setSiguientePaciente(null);
-        ultimoPaciente = actual;
     }
 
     private static void agregarTiquete(Tiquete tiquete) {
@@ -1156,47 +1109,35 @@ public class MediQueueApp {
             return;
         }
 
-        Paciente existente = primerPaciente;
-        while (existente != null) {
-            if (existente.getIdentificacion().equalsIgnoreCase(id)) {
-                JOptionPane.showMessageDialog(null, "Ya existe un paciente con esa identificacion.");
-                return;
-            }
-            existente = existente.getSiguientePaciente();
-        }
-
         try {
             int edadPaciente = Integer.parseInt(edad.getText().trim());
             Paciente paciente = new Paciente(id, nombrePaciente, edadPaciente,
                     String.valueOf(seguro.getSelectedItem()));
-            agregarPaciente(paciente);
 
-            if (!guardarPacientes()) {
-                quitarUltimoPaciente();
-                return;
-            }
+            // El gestor valida, agrega y guarda el paciente.
+            gestorPacientes.registrarPaciente(paciente);
 
-            // Agrega el paciente nuevo al indice ABB.
+            // Agrega el mismo objeto al indice ABB.
             gestorBusquedas.insertarPaciente(paciente);
 
             JOptionPane.showMessageDialog(
                     null, "Paciente registrado correctamente.\n" + paciente);
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(null, "La edad debe ser un numero entero.");
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException | IOException ex) {
             JOptionPane.showMessageDialog(null, ex.getMessage());
         }
     }
 
     // Genera un tiquete para un paciente registrado.
     private static void generarTiquete() {
-        if (primerPaciente == null) {
+        if (!gestorPacientes.hayPacientes()) {
             JOptionPane.showMessageDialog(null, "Primero registre un paciente.");
             return;
         }
 
         JComboBox<String> pacienteCombo = new JComboBox<>();
-        Paciente pacienteActual = primerPaciente;
+        Paciente pacienteActual = gestorPacientes.getPrimerPaciente();
         while (pacienteActual != null) {
             pacienteCombo.addItem(pacienteActual.getIdentificacion() + " - "
                     + pacienteActual.getNombre());
@@ -1691,12 +1632,12 @@ public class MediQueueApp {
     }
 
     private static void consultarPacientes() {
-        if (primerPaciente == null) {
+        if (!gestorPacientes.hayPacientes()) {
             JOptionPane.showMessageDialog(null, "Todavia no hay pacientes registrados.");
             return;
         }
         StringBuilder texto = new StringBuilder("PACIENTES REGISTRADOS\n\n");
-        Paciente actual = primerPaciente;
+        Paciente actual = gestorPacientes.getPrimerPaciente();
         while (actual != null) {
             texto.append(actual).append("\n");
             actual = actual.getSiguientePaciente();
@@ -2364,7 +2305,7 @@ public class MediQueueApp {
 
         // Actualiza el gestor con los datos actuales del sistema.
         gestorBusquedas.cargarDatos(
-                primerPaciente,
+                gestorPacientes.getPrimerPaciente(),
                 primerTiquete,
                 primerAtencion,
                 primerHistorial);
@@ -2652,6 +2593,14 @@ public class MediQueueApp {
                             String medico = JOptionPane.showInputDialog("Médico Asignado:");
                             String espacio = JOptionPane.showInputDialog("Espacio Asignado:");
                             gestorAtencionesAvanzado.registrarNuevaAtencion(tiquete, medico, espacio);
+                            // Actualiza la referencia principal por si esta fue la primera atención.
+                            primerAtencion = gestorAtencionesAvanzado.getPrimero();
+                            Atencion atencionRegistrada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(tiquete.getId());
+                            registrarMovimientoHistorialAvanzado(atencionRegistrada, Atencion.EN_ATENCION);
+                            if (!guardarAtencionesPersistentes()) {
+                                JOptionPane.showMessageDialog(null,
+                                        "La atención quedó registrada en memoria, pero no se pudo guardar atendidos.json.");
+                            }
                             JOptionPane.showMessageDialog(null, "Atención registrada mediante el Gestor Avanzado.");
                         } else {
                             JOptionPane.showMessageDialog(null, "Tiquete no encontrado.");
@@ -2666,11 +2615,21 @@ public class MediQueueApp {
                         
                         JOptionPane.showMessageDialog(null, "Consultando a la FDA, por favor espere...");
                         gestorAtencionesAvanzado.finalizarAtencion(idTq, diag, med, obs, proc);
+                        Atencion atencionFinalizada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(idTq);
+                        registrarMovimientoHistorialAvanzado(atencionFinalizada, Atencion.FINALIZADA);
+                        if (!guardarAtencionesPersistentes()) {
+                            throw new IllegalStateException("No se pudo guardar atendidos.json.");
+                        }
                         JOptionPane.showMessageDialog(null, "Atención finalizada. Medicamento validado y guardado.");
                         break;
                     case "3":
                         String idCanc = JOptionPane.showInputDialog("Ingrese el ID del tiquete a cancelar:");
                         gestorAtencionesAvanzado.cancelarAtencion(idCanc);
+                        Atencion atencionCancelada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(idCanc);
+                        registrarMovimientoHistorialAvanzado(atencionCancelada, Atencion.CANCELADA);
+                        if (!guardarAtencionesPersistentes()) {
+                            throw new IllegalStateException("No se pudo guardar atendidos.json.");
+                        }
                         JOptionPane.showMessageDialog(null, "Atención cancelada.");
                         break;
                     default:
@@ -2680,6 +2639,27 @@ public class MediQueueApp {
                 JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    // Registra en la pila clínica los cambios realizados desde el gestor avanzado.
+    private static void registrarMovimientoHistorialAvanzado(Atencion atencion, String estado) {
+        if (atencion == null) {
+            throw new IllegalStateException("No se encontró la atención para actualizar el historial clínico.");
+        }
+
+        gestorHistorialAvanzado.registrarMovimientoEnHistorial(atencion, estado);
+        primerHistorial = gestorHistorialAvanzado.getInicioHistoriales();
+
+        if (!guardarHistorialPersistente()) {
+            throw new IllegalStateException("No se pudo guardar historial.json.");
+        }
+
+        // Actualiza el índice de búsquedas con la lista de historiales vigente.
+        gestorBusquedas.cargarDatos(
+                gestorPacientes.getPrimerPaciente(),
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
     }
 
     // Integración - Gestor de Historial Clínico Avanzado (Pilas)
