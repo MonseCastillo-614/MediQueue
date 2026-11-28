@@ -1,3 +1,4 @@
+
 package persistencia;
 
 public class JsonValor {
@@ -23,9 +24,10 @@ public class JsonValor {
     }
 
     public void agregarHijo(String nombre, JsonValor hijo) {
+
         if (hijo == null) {
             throw new IllegalArgumentException(
-                "El hijo JSON no puede ser null."
+                    "El hijo JSON no puede ser null."
             );
         }
 
@@ -41,21 +43,23 @@ public class JsonValor {
     }
 
     public JsonValor campo(String nombre) {
+
         if (tipo != OBJETO) {
             throw new IllegalArgumentException(
-                "Se esperaba objeto JSON."
+                    "Se esperaba objeto JSON."
             );
         }
 
         if (nombre == null) {
             throw new IllegalArgumentException(
-                "El nombre del campo no puede ser null."
+                    "El nombre del campo no puede ser null."
             );
         }
 
         JsonValor actual = primerHijo;
 
         while (actual != null) {
+
             if (nombre.equals(actual.clave)) {
                 return actual;
             }
@@ -64,14 +68,15 @@ public class JsonValor {
         }
 
         throw new IllegalArgumentException(
-            "Falta el campo: " + nombre
+                "Falta el campo: " + nombre
         );
     }
 
     public String comoTexto() {
+
         if (tipo != CADENA) {
             throw new IllegalArgumentException(
-                "Se esperaba texto JSON."
+                    "Se esperaba texto JSON."
             );
         }
 
@@ -79,19 +84,33 @@ public class JsonValor {
     }
 
     public int comoEntero() {
+
         if (tipo != NUMERO) {
             throw new IllegalArgumentException(
-                "Se esperaba numero JSON."
+                    "Se esperaba numero JSON."
             );
         }
 
         return Integer.parseInt(valor);
     }
 
+    // NUEVO: permite recuperar numeros decimales.
+    public String comoNumeroTexto() {
+
+        if (tipo != NUMERO) {
+            throw new IllegalArgumentException(
+                    "Se esperaba numero JSON."
+            );
+        }
+
+        return valor;
+    }
+
     public void exigirTipo(int esperado) {
+
         if (tipo != esperado) {
             throw new IllegalArgumentException(
-                "Tipo JSON invalido."
+                    "Tipo JSON invalido."
             );
         }
     }

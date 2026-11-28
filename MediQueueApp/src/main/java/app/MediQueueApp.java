@@ -3,7 +3,20 @@
  */
 package app;
 import gestion.GestorTiquetes;
+import gestion.GestorPacientes;
+import gestion.GestorBusquedas;
+import gestion.GestorAtenciones;
+import gestion.GestorHistorialClinico;
 import persistencia.PersistenciaDatos;
+import persistencia.PersistenciaAtenciones;
+import persistencia.PersistenciaHistorial;
+import persistencia.PersistenciaSalas;
+import persistencia.PersistenciaGrafo;
+import estructuras.NodoAtencion;
+import estructuras.NodoHistorialPaciente;
+import estructuras.NodoPila;
+import estructuras.ColaTiquetes;
+import estructuras.GrafoSedes;
 import persistencia.LectorJson;
 import persistencia.JsonValor;
 import persistencia.EscritorJson;
@@ -13,8 +26,17 @@ import configuracion.Configuracion;
 import modelo.Usuario;
 import modelo.Tiquete;
 import modelo.Paciente;
+import modelo.Atencion;
+import modelo.HistorialPaciente;
+import modelo.RegistroHistorial;
+import modelo.Sede;
+import salas.GestorSalas;
+import salas.Sala;
+import salas.Consultorio;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JLabel;
@@ -30,16 +52,43 @@ import javax.swing.JPasswordField;
 public class MediQueueApp {
 
     // Registros guardados en listas enlazadas.
-    private static Paciente primerPaciente;
-    private static Paciente ultimoPaciente;
+    private static GestorPacientes gestorPacientes;
     private static Tiquete primerTiquete;
     private static Tiquete ultimoTiquete;
 
     // Administra las colas de prioridad de los tiquetes pendientes.
     private static final GestorTiquetes gestorTiquetes = new GestorTiquetes();
 
+    // Administra el indice ABB y las busquedas del sistema.
+    private static GestorBusquedas gestorBusquedas = new GestorBusquedas();
+
+    // Administra las salas medicas, salas de emergencia y consultorios.
+    private static GestorSalas gestorSalas;
+
     private static final PersistenciaDatos persistenciaDatos =
             new PersistenciaDatos(Paths.get("."));
+
+    // Persistencia de atenciones, historiales y espacios hospitalarios.
+    private static final PersistenciaAtenciones persistenciaAtenciones =
+            new PersistenciaAtenciones(persistenciaDatos);
+
+    private static final PersistenciaHistorial persistenciaHistorial =
+            new PersistenciaHistorial(persistenciaDatos);
+
+    private static final PersistenciaSalas persistenciaSalas =
+            new PersistenciaSalas(persistenciaDatos);
+
+    private static final PersistenciaGrafo persistenciaGrafo =
+            new PersistenciaGrafo(persistenciaDatos);
+
+    // Listas enlazadas recuperadas desde los archivos JSON.
+    private static NodoAtencion primerAtencion;
+    private static NodoHistorialPaciente primerHistorial;
+
+    // GESTORES INTEGRADOS NUEVOS
+    private static GrafoSedes grafoSedes;
+    private static GestorAtenciones gestorAtencionesAvanzado;
+    private static GestorHistorialClinico gestorHistorialAvanzado = new GestorHistorialClinico();
 
     // Adaptador para guardar y recuperar pacientes.
     private static final AdaptadorJson<Paciente> ADAPTADOR_PACIENTES =
@@ -71,12 +120,9 @@ public class MediQueueApp {
 
     public static void main(String[] args) {
 
-        ArchivoConfiguracion archivo = new ArchivoConfiguracion();
+        gestorPacientes = new GestorPacientes(persistenciaDatos, ADAPTADOR_PACIENTES);
 
-        // Carga los datos guardados.
-        if (!cargarDatosPersistentes()) {
-            return;
-        }
+        ArchivoConfiguracion archivo = new ArchivoConfiguracion();
 
         // Carga la configuracion.
         Configuracion configuracion = archivo.cargarConfiguracion();
@@ -97,6 +143,39 @@ public class MediQueueApp {
                 return;
             }
         }
+
+        // Inicializa los espacios hospitalarios segun la configuracion.
+        inicializarEspacios(configuracion);
+
+        // Carga pacientes y tiquetes despues de preparar la configuracion.
+        if (!cargarDatosPersistentes()) {
+            return;
+        }
+
+        // Recupera las colas de las salas y consultorios.
+        if (!cargarSalasPersistentes()) {
+            return;
+        }
+
+        // Recupera las atenciones y los historiales.
+        if (!cargarAtencionesEHistoriales()) {
+            return;
+        }
+
+        // Carga el grafo de sedes y los gestores nuevos
+        try {
+            grafoSedes = persistenciaGrafo.cargar();
+        } catch (IOException e) {
+            grafoSedes = new GrafoSedes();
+        }
+        gestorAtencionesAvanzado = new GestorAtenciones(persistenciaAtenciones, primerAtencion);
+
+        // Construye el indice ABB con los datos recuperados.
+        gestorBusquedas.cargarDatos(
+                gestorPacientes.getPrimerPaciente(),
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
 
         // Inicia sesion.
         Usuario usuarioIngresado = iniciarSesion(archivo);
@@ -121,6 +200,62 @@ public class MediQueueApp {
                     archivo,
                     usuarioIngresado.getNombreUsuario());
         }
+    }
+
+    // Inicializa las salas y consultorios de la sede.
+    private static void inicializarEspacios(Configuracion configuracion) {
+
+        gestorSalas = new GestorSalas(configuracion);
+
+        final int CAPACIDAD_INICIAL = 5;
+
+        // Registra las salas medicas y la sala preferencial configurada.
+        for (int i = 1; i <= configuracion.getCantidadSalas(); i++) {
+
+            String tipo = Sala.TIPO_NORMAL;
+
+            if (i == configuracion.getSalaPreferencial()) {
+                tipo = Sala.TIPO_PREFERENCIAL;
+            }
+
+            Sala sala = new Sala(i, CAPACIDAD_INICIAL, tipo);
+            gestorSalas.registrarSala(sala);
+        }
+
+        // Registra las salas de emergencia.
+        for (int i = 1; i <= configuracion.getCantidadEmergencias(); i++) {
+
+            Sala emergencia = new Sala(
+                    i,
+                    CAPACIDAD_INICIAL,
+                    Sala.TIPO_EMERGENCIA);
+
+            gestorSalas.registrarSalaEmergencia(emergencia);
+        }
+
+        // Registra los consultorios y el consultorio preferencial.
+        for (int i = 1;
+                i <= configuracion.getCantidadConsultorios(); i++) {
+
+            boolean preferencial =
+                    i == configuracion.getConsultorioPreferencial();
+
+            Consultorio consultorio = new Consultorio(
+                    i,
+                    CAPACIDAD_INICIAL,
+                    "General",
+                    preferencial);
+
+            gestorSalas.registrarConsultorio(consultorio);
+        }
+
+        System.out.println("Espacios hospitalarios inicializados.");
+        System.out.println("Salas medicas: "
+                + gestorSalas.getCantidadSalasRegistradas());
+        System.out.println("Salas de emergencia: "
+                + gestorSalas.getCantidadEmergenciasRegistradas());
+        System.out.println("Consultorios: "
+                + gestorSalas.getCantidadConsultoriosRegistrados());
     }
 
     // Inicia sesion.
@@ -405,6 +540,54 @@ public class MediQueueApp {
 
                 consultarColasPrioridad();
 
+            } else if (opcion.equals("14")) {
+
+                consultarEspaciosDisponibles();
+
+            } else if (opcion.equals("15")) {
+
+                consultarPacientesPorEspacio();
+
+            } else if (opcion.equals("16")) {
+
+                consultarPacientesPorPersonal();
+
+            } else if (opcion.equals("17")) {
+
+                asignarPersonalAEspacio();
+
+            } else if (opcion.equals("18")) {
+
+                iniciarAtencionMedica();
+
+            } else if (opcion.equals("19")) {
+
+                gestionarEstadoAtencion();
+
+            } else if (opcion.equals("20")) {
+
+                consultarHistorialPaciente();
+
+            } else if (opcion.equals("21")) {
+
+                exportarHistorialPaciente();
+
+            } else if (opcion.equals("22")) {
+
+                consultarBusquedasABB();
+
+            } else if (opcion.equals("23")) {
+
+                menuGrafosSedes();
+
+            } else if (opcion.equals("24")) {
+
+                menuGestorAtencionesAvanzado();
+
+            } else if (opcion.equals("25")) {
+
+                menuGestorHistorialAvanzado();
+
             } else if (opcion.equals("8")) {
 
                 int confirmacion = JOptionPane.showConfirmDialog(
@@ -428,8 +611,7 @@ public class MediQueueApp {
                             // Se elimina tambien el archivo de pacientes.
                             
                             persistenciaDatos.eliminarPacientes();
-                            primerPaciente = null;
-                            ultimoPaciente = null;
+                            gestorPacientes.limpiarPacientes();
                             primerTiquete = null;
                             ultimoTiquete = null;
 
@@ -514,17 +696,33 @@ public class MediQueueApp {
         agregarOpcionMenu(opciones, "6. Eliminar configuracion", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
+        agregarOpcionMenu(opciones, "SISTEMA", true);
+        agregarOpcionMenu(opciones, "7. Cerrar sesion", false);
+        agregarOpcionMenu(opciones, "8. Reiniciar sistema", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
+
         agregarOpcionMenu(opciones, "GESTION DE PACIENTES Y TIQUETES", true);
         agregarOpcionMenu(opciones, "9. Registrar paciente/cliente", false);
         agregarOpcionMenu(opciones, "10. Generar tiquete de atencion", false);
         agregarOpcionMenu(opciones, "11. Consultar pacientes", false);
         agregarOpcionMenu(opciones, "12. Consultar tiquetes", false);
         agregarOpcionMenu(opciones, "13. Consultar colas de prioridad", false);
+        agregarOpcionMenu(opciones, "14. Consultar espacios disponibles", false);
+        agregarOpcionMenu(opciones, "15. Consultar pacientes por sala/consultorio", false);
+        agregarOpcionMenu(opciones, "16. Consultar pacientes por medico/enfermera", false);
+        agregarOpcionMenu(opciones, "17. Asignar personal a sala/consultorio", false);
+        agregarOpcionMenu(opciones, "18. Iniciar/registrar atencion medica", false);
+        agregarOpcionMenu(opciones, "19. Finalizar, cancelar o reingresar atencion", false);
+        agregarOpcionMenu(opciones, "20. Consultar historial del paciente", false);
+        agregarOpcionMenu(opciones, "21. Exportar historial completo", false);
+        agregarOpcionMenu(opciones, "22. Consultas y operaciones mediante ABB", false);
         opciones.add(javax.swing.Box.createVerticalStrut(10));
 
-        agregarOpcionMenu(opciones, "SISTEMA", true);
-        agregarOpcionMenu(opciones, "7. Cerrar sesion", false);
-        agregarOpcionMenu(opciones, "8. Reiniciar sistema", false);
+        agregarOpcionMenu(opciones, "MÓDULOS AVANZADOS (INTEGRACIÓN)", true);
+        agregarOpcionMenu(opciones, "23. Gestionar Sedes y Conexiones (Grafos)", false);
+        agregarOpcionMenu(opciones, "24. Gestor de Atenciones Avanzado (OpenFDA)", false);
+        agregarOpcionMenu(opciones, "25. Gestor de Historial Avanzado (Pilas)", false);
+        opciones.add(javax.swing.Box.createVerticalStrut(10));
 
         JPanel inferior = new JPanel(new java.awt.BorderLayout(0, 5));
         inferior.add(new JLabel("Seleccione una opcion:"),
@@ -550,8 +748,7 @@ public class MediQueueApp {
     // Carga los pacientes primero para poder enlazarlos con sus tiquetes.
     private static boolean cargarDatosPersistentes() {
         try {
-            primerPaciente = persistenciaDatos.cargarPacientes(ADAPTADOR_PACIENTES);
-            ultimoPaciente = obtenerUltimoPaciente(primerPaciente);
+            gestorPacientes.cargarPacientes();
 
             primerTiquete = persistenciaDatos.cargarTiquetes(ADAPTADOR_TIQUETES);
             ultimoTiquete = obtenerUltimoTiquete(primerTiquete);
@@ -581,7 +778,7 @@ public class MediQueueApp {
 
     private static boolean guardarPacientes() {
         try {
-            persistenciaDatos.guardarPacientes(primerPaciente, ADAPTADOR_PACIENTES);
+            gestorPacientes.guardarPacientes();
             return true;
         } catch (IOException | RuntimeException ex) {
             JOptionPane.showMessageDialog(
@@ -599,6 +796,109 @@ public class MediQueueApp {
             JOptionPane.showMessageDialog(
                     null, "No se pudieron guardar los tiquetes.\n" + ex.getMessage(),
                     "Error al guardar tiquetes", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    // Recupera las salas, emergencias y consultorios desde salas.json.
+    private static boolean cargarSalasPersistentes() {
+        try {
+            persistenciaSalas.cargar(gestorSalas);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron recuperar las salas.\n" + ex.getMessage(),
+                    "Error al cargar salas",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    // Recupera las atenciones desde atendidos.json y los historiales desde historial.json.
+    private static boolean cargarAtencionesEHistoriales() {
+        try {
+            primerAtencion = persistenciaAtenciones.cargar();
+            primerHistorial = persistenciaHistorial.cargar();
+
+            // Sincroniza el gestor avanzado con los historiales recuperados.
+            gestorHistorialAvanzado.setInicioHistoriales(primerHistorial);
+
+            enlazarAtencionesConTiquetesRegistrados();
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron recuperar las atenciones o historiales.\n"
+                    + ex.getMessage(),
+                    "Error al cargar informacion",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    // Evita duplicar objetos Tiquete: cada atencion utiliza el tiquete principal cargado.
+    private static void enlazarAtencionesConTiquetesRegistrados() {
+        NodoAtencion actual = primerAtencion;
+        while (actual != null) {
+            Tiquete asociado = buscarTiquetePorId(actual.getDato().getTiquete().getId());
+            if (asociado != null) {
+                actual.getDato().setTiquete(asociado);
+            }
+            actual = actual.getSiguiente();
+        }
+    }
+
+    private static Tiquete buscarTiquetePorId(String id) {
+        Tiquete actual = primerTiquete;
+        while (actual != null) {
+            if (actual.getId().equalsIgnoreCase(id)) return actual;
+            actual = actual.getSiguienteRegistro();
+        }
+        return null;
+    }
+
+    // Guarda las salas y sus colas de espera.
+    private static boolean guardarSalasPersistentes() {
+        try {
+            persistenciaSalas.guardar(gestorSalas);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron guardar las salas.\n" + ex.getMessage(),
+                    "Error al guardar salas",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    // Guarda la lista enlazada de atenciones.
+    private static boolean guardarAtencionesPersistentes() {
+        try {
+            persistenciaAtenciones.guardar(primerAtencion);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron guardar las atenciones.\n" + ex.getMessage(),
+                    "Error al guardar atenciones",
+                    JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    // Guarda los historiales de pacientes.
+    private static boolean guardarHistorialPersistente() {
+        try {
+            persistenciaHistorial.guardar(primerHistorial);
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No se pudieron guardar los historiales.\n" + ex.getMessage(),
+                    "Error al guardar historiales",
+                    JOptionPane.ERROR_MESSAGE);
             return false;
         }
     }
@@ -726,36 +1026,11 @@ public class MediQueueApp {
     }
 
     private static Paciente buscarPacientePorIdentificacion(String identificacion) {
-        Paciente actual = primerPaciente;
-        while (actual != null) {
-            if (actual.getIdentificacion().equalsIgnoreCase(identificacion)) {
-                return actual;
-            }
-            actual = actual.getSiguientePaciente();
-        }
-        return null;
+        return gestorPacientes.buscarPorIdentificacion(identificacion);
     }
 
     private static Paciente buscarPacientePorIndice(int indice) {
-        Paciente actual = primerPaciente;
-        int posicion = 0;
-        while (actual != null) {
-            if (posicion == indice) {
-                return actual;
-            }
-            posicion++;
-            actual = actual.getSiguientePaciente();
-        }
-        return null;
-    }
-
-    private static Paciente obtenerUltimoPaciente(Paciente primero) {
-        Paciente actual = primero;
-        if (actual == null) return null;
-        while (actual.getSiguientePaciente() != null) {
-            actual = actual.getSiguientePaciente();
-        }
-        return actual;
+        return gestorPacientes.buscarPorIndice(indice);
     }
 
     private static Tiquete obtenerUltimoTiquete(Tiquete primero) {
@@ -775,31 +1050,6 @@ public class MediQueueApp {
             actual = actual.getSiguienteRegistro();
         }
         return cantidad;
-    }
-
-    private static void agregarPaciente(Paciente paciente) {
-        paciente.setSiguientePaciente(null);
-        if (primerPaciente == null) {
-            primerPaciente = paciente;
-        } else {
-            ultimoPaciente.setSiguientePaciente(paciente);
-        }
-        ultimoPaciente = paciente;
-    }
-
-    private static void quitarUltimoPaciente() {
-        if (primerPaciente == null) return;
-        if (primerPaciente == ultimoPaciente) {
-            primerPaciente = null;
-            ultimoPaciente = null;
-            return;
-        }
-        Paciente actual = primerPaciente;
-        while (actual.getSiguientePaciente() != ultimoPaciente) {
-            actual = actual.getSiguientePaciente();
-        }
-        actual.setSiguientePaciente(null);
-        ultimoPaciente = actual;
     }
 
     private static void agregarTiquete(Tiquete tiquete) {
@@ -859,43 +1109,35 @@ public class MediQueueApp {
             return;
         }
 
-        Paciente existente = primerPaciente;
-        while (existente != null) {
-            if (existente.getIdentificacion().equalsIgnoreCase(id)) {
-                JOptionPane.showMessageDialog(null, "Ya existe un paciente con esa identificacion.");
-                return;
-            }
-            existente = existente.getSiguientePaciente();
-        }
-
         try {
             int edadPaciente = Integer.parseInt(edad.getText().trim());
             Paciente paciente = new Paciente(id, nombrePaciente, edadPaciente,
                     String.valueOf(seguro.getSelectedItem()));
-            agregarPaciente(paciente);
 
-            if (!guardarPacientes()) {
-                quitarUltimoPaciente();
-                return;
-            }
+            // El gestor valida, agrega y guarda el paciente.
+            gestorPacientes.registrarPaciente(paciente);
+
+            // Agrega el mismo objeto al indice ABB.
+            gestorBusquedas.insertarPaciente(paciente);
+
             JOptionPane.showMessageDialog(
                     null, "Paciente registrado correctamente.\n" + paciente);
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(null, "La edad debe ser un numero entero.");
-        } catch (IllegalArgumentException ex) {
+        } catch (IllegalArgumentException | IOException ex) {
             JOptionPane.showMessageDialog(null, ex.getMessage());
         }
     }
 
     // Genera un tiquete para un paciente registrado.
     private static void generarTiquete() {
-        if (primerPaciente == null) {
+        if (!gestorPacientes.hayPacientes()) {
             JOptionPane.showMessageDialog(null, "Primero registre un paciente.");
             return;
         }
 
         JComboBox<String> pacienteCombo = new JComboBox<>();
-        Paciente pacienteActual = primerPaciente;
+        Paciente pacienteActual = gestorPacientes.getPrimerPaciente();
         while (pacienteActual != null) {
             pacienteCombo.addItem(pacienteActual.getIdentificacion() + " - "
                     + pacienteActual.getNombre());
@@ -968,37 +1210,434 @@ public class MediQueueApp {
         try {
             Tiquete tiquete = new Tiquete(id, paciente,
                     String.valueOf(prioridad.getSelectedItem()), tipoCodigo, atencionCodigo);
-            agregarTiquete(tiquete);
 
-            if (!guardarTiquetes()) {
-                quitarUltimoTiquete();
+            // Primero se asigna el espacio. Si no hay cupo, no se registra el tiquete.
+            boolean asignado = gestorSalas.asignarTiquete(tiquete);
+
+            if (!asignado) {
+                JOptionPane.showMessageDialog(null,
+                        "No fue posible asignar el tiquete.\n"
+                        + "Revise el tipo, la prioridad y la disponibilidad del espacio.");
                 return;
             }
 
-            // El tiquete guardado tambien se agrega a su cola de prioridad.
+            agregarTiquete(tiquete);
+            if (!guardarTiquetes()) {
+                quitarUltimoTiquete();
+                gestorSalas.removerTiquete(id);
+                return;
+            }
+
+            // Se conserva la cola de prioridad existente del proyecto.
             try {
                 gestorTiquetes.agregarTiquete(tiquete);
             } catch (IllegalArgumentException | IllegalStateException ex) {
                 quitarUltimoTiquete();
+                gestorSalas.removerTiquete(id);
                 guardarTiquetes();
                 JOptionPane.showMessageDialog(null, ex.getMessage());
                 return;
             }
 
-            JOptionPane.showMessageDialog(
-                    null, "Tiquete generado correctamente.\n" + tiquete);
+            if (!guardarSalasPersistentes()) {
+                // El tiquete permanece registrado en memoria; se informa
+                // que la cola no pudo persistirse para evitar desincronizar
+                // la cola de prioridad con las salas.
+                return;
+            }
+
+            JOptionPane.showMessageDialog(null,
+                    "Tiquete generado y asignado correctamente.\n" + tiquete);
         } catch (IllegalArgumentException ex) {
             JOptionPane.showMessageDialog(null, ex.getMessage());
         }
     }
 
+    // Inicia la atencion de un tiquete pendiente y registra sus datos clinicos.
+    private static void iniciarAtencionMedica() {
+        int cantidad = contarTiquetesPendientes();
+        if (cantidad == 0) {
+            JOptionPane.showMessageDialog(null, "No hay tiquetes pendientes para atender.");
+            return;
+        }
+
+        JComboBox<String> tiquetes = new JComboBox<>();
+        for (Tiquete actual = primerTiquete; actual != null;
+                actual = actual.getSiguienteRegistro()) {
+            if (!actual.estaAtendido()) {
+                tiquetes.addItem(actual.getId() + " - "
+                        + actual.getNombrePaciente() + " | " + actual.getPrioridad());
+            }
+        }
+
+        JTextField medico = new JTextField(18);
+        JTextField diagnostico = new JTextField(18);
+        JTextField medicamentos = new JTextField(18);
+        JTextField observaciones = new JTextField(18);
+        JTextField procedimientos = new JTextField(18);
+        JTextField costo = new JTextField("0", 18);
+
+        JPanel panel = new JPanel(new GridLayout(0, 2, 8, 7));
+        panel.add(new JLabel("Tiquete pendiente:")); panel.add(tiquetes);
+        panel.add(new JLabel("Medico asignado:")); panel.add(medico);
+        panel.add(new JLabel("Diagnostico:")); panel.add(diagnostico);
+        panel.add(new JLabel("Medicamentos:")); panel.add(medicamentos);
+        panel.add(new JLabel("Observaciones:")); panel.add(observaciones);
+        panel.add(new JLabel("Procedimientos:")); panel.add(procedimientos);
+        panel.add(new JLabel("Costo:")); panel.add(costo);
+
+        int respuesta = JOptionPane.showConfirmDialog(null, panel,
+                "Iniciar atencion medica", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (respuesta != JOptionPane.OK_OPTION) return;
+
+        Tiquete tiquete = obtenerTiquetePendientePorIndice(tiquetes.getSelectedIndex());
+        if (tiquete == null) {
+            JOptionPane.showMessageDialog(null, "Seleccione un tiquete valido.");
+            return;
+        }
+
+        try {
+            double costoAtencion = Double.parseDouble(costo.getText().trim().replace(',', '.'));
+            String espacio = determinarEspacioTiquete(tiquete);
+            if (espacio == null) espacio = "No especificado";
+
+            Atencion nueva = new Atencion(tiquete, medico.getText(),
+                    diagnostico.getText(), medicamentos.getText(),
+                    observaciones.getText(), procedimientos.getText(),
+                    espacio, costoAtencion, Atencion.EN_ATENCION);
+
+            tiquete.registrarAtencion();
+            gestorSalas.removerTiquete(tiquete.getId());
+            gestorTiquetes.removerTiquete(tiquete.getId());
+            agregarAtencion(nueva);
+            agregarRegistroHistorial(nueva, Atencion.EN_ATENCION);
+
+            if (!guardarTiquetes() || !guardarSalasPersistentes()
+                    || !guardarAtencionesPersistentes()
+                    || !guardarHistorialPersistente()) {
+                JOptionPane.showMessageDialog(null,
+                        "La atencion se registro en memoria, pero algun archivo no pudo guardarse. Revise los mensajes anteriores.");
+                return;
+            }
+
+            JOptionPane.showMessageDialog(null,
+                    "Atencion iniciada y guardada correctamente.\nTiquete: "
+                    + tiquete.getId() + "\nEspacio: " + espacio);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null, "El costo debe ser un numero valido.");
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(null, ex.getMessage());
+        }
+    }
+
+    private static int contarTiquetesPendientes() {
+        int cantidad = 0;
+        for (Tiquete actual = primerTiquete; actual != null;
+                actual = actual.getSiguienteRegistro()) {
+            if (!actual.estaAtendido()) cantidad++;
+        }
+        return cantidad;
+    }
+
+    private static Tiquete obtenerTiquetePendientePorIndice(int indice) {
+        if (indice < 0) return null;
+        int posicion = 0;
+        for (Tiquete actual = primerTiquete; actual != null;
+                actual = actual.getSiguienteRegistro()) {
+            if (!actual.estaAtendido()) {
+                if (posicion == indice) return actual;
+                posicion++;
+            }
+        }
+        return null;
+    }
+
+    private static String determinarEspacioTiquete(Tiquete tiquete) {
+        Configuracion c = gestorSalas.getConfiguracion();
+        for (int i = 1; i <= c.getCantidadSalas(); i++) {
+            Sala sala = gestorSalas.buscarSala(i);
+            if (sala != null && contieneTiquete(sala.getColaEspera(), tiquete.getId()))
+                return "Sala medica " + i;
+        }
+        for (int i = 1; i <= c.getCantidadEmergencias(); i++) {
+            Sala sala = gestorSalas.buscarSalaEmergencia(i);
+            if (sala != null && contieneTiquete(sala.getColaEspera(), tiquete.getId()))
+                return "Sala de emergencia " + i;
+        }
+        for (int i = 1; i <= c.getCantidadConsultorios(); i++) {
+            Consultorio consultorio = gestorSalas.buscarConsultorio(i);
+            if (consultorio != null && contieneTiquete(consultorio.getColaEspera(), tiquete.getId()))
+                return "Consultorio " + i;
+        }
+        return null;
+    }
+
+    private static boolean contieneTiquete(ColaTiquetes cola, String id) {
+        for (int i = 0; i < cola.tamano(); i++) {
+            if (cola.obtener(i).getId().equalsIgnoreCase(id)) return true;
+        }
+        return false;
+    }
+
+    private static void agregarAtencion(Atencion atencion) {
+        NodoAtencion nuevo = new NodoAtencion(atencion);
+        if (primerAtencion == null) {
+            primerAtencion = nuevo;
+        } else {
+            NodoAtencion actual = primerAtencion;
+            while (actual.getSiguiente() != null) actual = actual.getSiguiente();
+            actual.setSiguiente(nuevo);
+        }
+    }
+
+    private static HistorialPaciente buscarHistorial(String identificacion) {
+        NodoHistorialPaciente actual = primerHistorial;
+        while (actual != null) {
+            if (actual.getDato().getIdentificacion().equalsIgnoreCase(identificacion)) {
+                return actual.getDato();
+            }
+            actual = actual.getSiguiente();
+        }
+        return null;
+    }
+
+    // Busca el historial por identificacion, nombre o ID del tiquete.
+    private static HistorialPaciente buscarHistorialPorDato(String dato) {
+        Tiquete tiquete = primerTiquete;
+
+        // Busca primero entre los tiquetes registrados.
+        while (tiquete != null) {
+            if (tiquete.getId().equalsIgnoreCase(dato)
+                    || tiquete.getIdentificacionPaciente().equalsIgnoreCase(dato)
+                    || tiquete.getNombrePaciente().equalsIgnoreCase(dato)) {
+                return buscarHistorial(tiquete.getIdentificacionPaciente());
+            }
+            tiquete = tiquete.getSiguienteRegistro();
+        }
+
+        // Busca tambien en los registros que ya forman parte del historial.
+        NodoHistorialPaciente actual = primerHistorial;
+        while (actual != null) {
+            HistorialPaciente historial = actual.getDato();
+            NodoPila registro = historial.getRegistros().getTope();
+
+            while (registro != null) {
+                Tiquete asociado = registro.getDato().getAtencion().getTiquete();
+                if (asociado.getId().equalsIgnoreCase(dato)
+                        || asociado.getNombrePaciente().equalsIgnoreCase(dato)
+                        || asociado.getIdentificacionPaciente().equalsIgnoreCase(dato)) {
+                    return historial;
+                }
+                registro = registro.getSiguiente();
+            }
+            actual = actual.getSiguiente();
+        }
+        return null;
+    }
+
+    private static void agregarRegistroHistorial(Atencion atencion, String resultado) {
+        String identificacion = atencion.getTiquete().getIdentificacionPaciente();
+        HistorialPaciente historial = buscarHistorial(identificacion);
+        if (historial == null) {
+            historial = new HistorialPaciente(identificacion);
+            NodoHistorialPaciente nuevo = new NodoHistorialPaciente(historial);
+            if (primerHistorial == null) {
+                primerHistorial = nuevo;
+            } else {
+                NodoHistorialPaciente actual = primerHistorial;
+                while (actual.getSiguiente() != null) actual = actual.getSiguiente();
+                actual.setSiguiente(nuevo);
+            }
+        }
+        historial.agregarRegistro(new RegistroHistorial(atencion, resultado));
+    }
+
+    // Cambia el estado de una atencion activa: finalizada, cancelada o reingreso.
+    private static void gestionarEstadoAtencion() {
+        int cantidad = contarAtencionesActivas();
+        if (cantidad == 0) {
+            JOptionPane.showMessageDialog(null, "No hay atenciones activas.");
+            return;
+        }
+
+        JComboBox<String> combo = new JComboBox<>();
+        for (NodoAtencion actual = primerAtencion; actual != null;
+                actual = actual.getSiguiente()) {
+            if (Atencion.EN_ATENCION.equals(actual.getDato().getEstado())) {
+                Atencion a = actual.getDato();
+                combo.addItem(a.getTiquete().getId() + " - "
+                        + a.getTiquete().getNombrePaciente());
+            }
+        }
+        String[] estados = {Atencion.FINALIZADA, Atencion.CANCELADA, Atencion.REINGRESO};
+        JComboBox<String> estado = new JComboBox<>(estados);
+        JPanel panel = new JPanel(new GridLayout(0, 2, 8, 7));
+        panel.add(new JLabel("Atencion:")); panel.add(combo);
+        panel.add(new JLabel("Accion:")); panel.add(estado);
+
+        int respuesta = JOptionPane.showConfirmDialog(null, panel,
+                "Gestionar atencion", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (respuesta != JOptionPane.OK_OPTION) return;
+
+        Atencion seleccionada = obtenerAtencionActivaPorIndice(combo.getSelectedIndex());
+        if (seleccionada == null) return;
+        String nuevoEstado = String.valueOf(estado.getSelectedItem());
+
+        if (Atencion.REINGRESO.equals(nuevoEstado)) {
+            Tiquete tiquete = seleccionada.getTiquete();
+            if (!gestorSalas.asignarTiquete(tiquete)) {
+                JOptionPane.showMessageDialog(null,
+                        "No hay espacio disponible para reingresar al paciente. La atencion sigue activa.");
+                return;
+            }
+            tiquete.setFechaHoraAtencion(Tiquete.SIN_ATENDER);
+            try {
+                gestorTiquetes.agregarTiquete(tiquete);
+            } catch (RuntimeException ex) {
+                gestorSalas.removerTiquete(tiquete.getId());
+                tiquete.registrarAtencion();
+                JOptionPane.showMessageDialog(null, ex.getMessage());
+                return;
+            }
+        }
+
+        seleccionada.setEstado(nuevoEstado);
+        agregarRegistroHistorial(seleccionada, nuevoEstado);
+
+        if (!guardarTiquetes() || !guardarSalasPersistentes()
+                || !guardarAtencionesPersistentes() || !guardarHistorialPersistente()) return;
+
+        JOptionPane.showMessageDialog(null,
+                "La atencion se actualizo a: " + nuevoEstado);
+    }
+
+    private static int contarAtencionesActivas() {
+        int cantidad = 0;
+        for (NodoAtencion actual = primerAtencion; actual != null;
+                actual = actual.getSiguiente())
+            if (Atencion.EN_ATENCION.equals(actual.getDato().getEstado())) cantidad++;
+        return cantidad;
+    }
+
+    private static Atencion obtenerAtencionActivaPorIndice(int indice) {
+        if (indice < 0) return null;
+        int posicion = 0;
+        for (NodoAtencion actual = primerAtencion; actual != null;
+                actual = actual.getSiguiente()) {
+            if (Atencion.EN_ATENCION.equals(actual.getDato().getEstado())) {
+                if (posicion == indice) return actual.getDato();
+                posicion++;
+            }
+        }
+        return null;
+    }
+
+    // Muestra los ultimos n registros de la pila clinica.
+    private static void consultarHistorialPaciente() {
+        String dato = JOptionPane.showInputDialog(null,
+                "Ingrese el ID del tiquete, nombre o identificacion del paciente:",
+                "Consultar historial", JOptionPane.QUESTION_MESSAGE);
+        if (dato == null || dato.trim().isEmpty()) return;
+
+        HistorialPaciente historial = buscarHistorialPorDato(dato.trim());
+        if (historial == null || historial.getRegistros().estaVacia()) {
+            JOptionPane.showMessageDialog(null,
+                    "El paciente no tiene historial registrado.");
+            return;
+        }
+
+        String entrada = JOptionPane.showInputDialog(null,
+                "¿Cuantos registros recientes desea consultar?",
+                "Historial del paciente", JOptionPane.QUESTION_MESSAGE);
+        if (entrada == null) return;
+
+        try {
+            int limite = Integer.parseInt(entrada.trim());
+            if (limite <= 0) throw new NumberFormatException();
+
+            StringBuilder texto = new StringBuilder("HISTORIAL CLINICO\n\n");
+            texto.append("Identificacion: ")
+                    .append(historial.getIdentificacion()).append("\n\n");
+
+            NodoPila actual = historial.getRegistros().getTope();
+            int contador = 0;
+            while (actual != null && contador < limite) {
+                texto.append(formatearRegistro(actual.getDato())).append("\n\n");
+                actual = actual.getSiguiente();
+                contador++;
+            }
+
+            JOptionPane.showMessageDialog(null, texto.toString(),
+                    "Historial del paciente", JOptionPane.INFORMATION_MESSAGE);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "Ingrese un numero entero mayor que cero.");
+        }
+    }
+
+    // Exporta el historial completo de un paciente a un archivo TXT.
+    private static void exportarHistorialPaciente() {
+        String dato = JOptionPane.showInputDialog(null,
+                "Ingrese el ID del tiquete, nombre o identificacion del paciente:",
+                "Exportar historial", JOptionPane.QUESTION_MESSAGE);
+        if (dato == null || dato.trim().isEmpty()) return;
+
+        HistorialPaciente historial = buscarHistorialPorDato(dato.trim());
+        if (historial == null || historial.getRegistros().estaVacia()) {
+            JOptionPane.showMessageDialog(null,
+                    "El paciente no tiene historial para exportar.");
+            return;
+        }
+
+        StringBuilder texto = new StringBuilder("HISTORIAL CLINICO COMPLETO\n");
+        texto.append("Identificacion: ")
+                .append(historial.getIdentificacion()).append("\n\n");
+
+        NodoPila actual = historial.getRegistros().getTope();
+        while (actual != null) {
+            texto.append(formatearRegistro(actual.getDato())).append("\n\n");
+            actual = actual.getSiguiente();
+        }
+
+        try {
+            String nombre = "historial_"
+                    + historial.getIdentificacion()
+                            .replaceAll("[^A-Za-z0-9_-]", "_")
+                    + ".txt";
+            Files.write(Paths.get(nombre),
+                    texto.toString().getBytes(StandardCharsets.UTF_8));
+            JOptionPane.showMessageDialog(null,
+                    "Historial exportado correctamente en:\n"
+                    + Paths.get(nombre).toAbsolutePath());
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "No se pudo exportar el historial.\n" + ex.getMessage());
+        }
+    }
+
+    private static String formatearRegistro(RegistroHistorial registro) {
+        Atencion a = registro.getAtencion();
+        return "Tiquete: " + a.getTiquete().getId()
+                + " | Paciente: " + a.getTiquete().getNombrePaciente()
+                + " | Resultado: " + registro.getResultado()
+                + "\nMedico: " + a.getMedicoAsignado()
+                + "\nDiagnostico: " + a.getDiagnostico()
+                + "\nMedicamentos: " + a.getMedicamentos()
+                + "\nObservaciones: " + a.getObservaciones()
+                + "\nProcedimientos: " + a.getProcedimientos()
+                + "\nEspacio: " + a.getEspacioAsignado()
+                + "\nCosto: " + a.getCosto();
+    }
+
     private static void consultarPacientes() {
-        if (primerPaciente == null) {
+        if (!gestorPacientes.hayPacientes()) {
             JOptionPane.showMessageDialog(null, "Todavia no hay pacientes registrados.");
             return;
         }
         StringBuilder texto = new StringBuilder("PACIENTES REGISTRADOS\n\n");
-        Paciente actual = primerPaciente;
+        Paciente actual = gestorPacientes.getPrimerPaciente();
         while (actual != null) {
             texto.append(actual).append("\n");
             actual = actual.getSiguientePaciente();
@@ -1059,6 +1698,155 @@ public class MediQueueApp {
                     .append("\n");
         }
         texto.append("\n");
+    }
+
+    // Consulta las salas y consultorios que tienen espacio en su cola.
+    private static void consultarEspaciosDisponibles() {
+        if (gestorSalas == null) {
+            JOptionPane.showMessageDialog(null,
+                    "La administracion de espacios no esta inicializada.");
+            return;
+        }
+
+        String resultado = gestorSalas.consultarSalasDisponibles()
+                + "\n\n"
+                + gestorSalas.consultarConsultoriosDisponibles();
+
+        JOptionPane.showMessageDialog(null, resultado,
+                "Espacios disponibles", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Consulta los pacientes en espera de una sala o consultorio.
+    private static void consultarPacientesPorEspacio() {
+        String[] opciones = {
+            "Sala medica", "Sala de emergencia", "Consultorio"
+        };
+
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de espacio:",
+                "Consultar pacientes por espacio",
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+
+        if (tipo == null) {
+            return;
+        }
+
+        String entrada = JOptionPane.showInputDialog(
+                null, "Ingrese el identificador del espacio:");
+
+        if (entrada == null) {
+            return;
+        }
+
+        try {
+            int identificador = Integer.parseInt(entrada.trim());
+            String resultado;
+
+            if (tipo.equals("Sala medica")) {
+                resultado = gestorSalas.mostrarPacientesPorSala(identificador);
+            } else if (tipo.equals("Sala de emergencia")) {
+                resultado = gestorSalas.mostrarPacientesPorSalaEmergencia(
+                        identificador);
+            } else {
+                resultado = gestorSalas.mostrarPacientesPorConsultorio(
+                        identificador);
+            }
+
+            JOptionPane.showMessageDialog(null, resultado,
+                    "Pacientes en espera", JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "El identificador debe ser un numero entero.");
+        }
+    }
+
+    // Asigna el personal responsable de una sala o consultorio.
+    private static void asignarPersonalAEspacio() {
+        if (gestorSalas == null) {
+            JOptionPane.showMessageDialog(null,
+                    "La administracion de espacios no esta inicializada.");
+            return;
+        }
+
+        String[] tipos = {"Sala medica", "Sala de emergencia", "Consultorio"};
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de espacio:",
+                "Asignar personal", JOptionPane.QUESTION_MESSAGE,
+                null, tipos, tipos[0]);
+        if (tipo == null) return;
+
+        String entrada = JOptionPane.showInputDialog(
+                null, "Ingrese el identificador del espacio:");
+        if (entrada == null) return;
+
+        try {
+            int id = Integer.parseInt(entrada.trim());
+            String medico = JOptionPane.showInputDialog(
+                    null, "Nombre del medico responsable:");
+            if (medico == null || medico.trim().isEmpty()) return;
+
+            if (tipo.equals("Consultorio")) {
+                Consultorio consultorio = gestorSalas.buscarConsultorio(id);
+                if (consultorio == null) {
+                    JOptionPane.showMessageDialog(null,
+                            "No existe ese consultorio.");
+                    return;
+                }
+                consultorio.setMedicoResponsable(medico.trim());
+            } else {
+                Sala sala = tipo.equals("Sala medica")
+                        ? gestorSalas.buscarSala(id)
+                        : gestorSalas.buscarSalaEmergencia(id);
+                if (sala == null) {
+                    JOptionPane.showMessageDialog(null,
+                            "No existe esa sala.");
+                    return;
+                }
+                sala.setMedicoResponsable(medico.trim());
+                String enfermera = JOptionPane.showInputDialog(
+                        null, "Nombre de la enfermera a cargo:");
+                if (enfermera == null || enfermera.trim().isEmpty()) return;
+                sala.setEnfermeraCargo(enfermera.trim());
+            }
+
+            JOptionPane.showMessageDialog(null,
+                    "Personal asignado correctamente al espacio.");
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(null,
+                    "El identificador debe ser un numero entero.");
+        }
+    }
+
+    // Consulta los pacientes en espera asociados a un medico o enfermera.
+    private static void consultarPacientesPorPersonal() {
+        String[] opciones = {"Medico", "Enfermera"};
+
+        String tipo = (String) JOptionPane.showInputDialog(
+                null, "Seleccione el tipo de personal:",
+                "Consultar pacientes por personal",
+                JOptionPane.QUESTION_MESSAGE, null, opciones, opciones[0]);
+
+        if (tipo == null) {
+            return;
+        }
+
+        String nombre = JOptionPane.showInputDialog(
+                null, "Ingrese el nombre del " + tipo.toLowerCase() + ":");
+
+        if (nombre == null || nombre.trim().isEmpty()) {
+            return;
+        }
+
+        String resultado;
+        if (tipo.equals("Medico")) {
+            resultado = gestorSalas.mostrarPacientesPorMedico(nombre.trim());
+        } else {
+            resultado = gestorSalas.mostrarPacientesPorEnfermera(nombre.trim());
+        }
+
+        JOptionPane.showMessageDialog(null, resultado,
+                "Pacientes por personal", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private static void agregarOpcionMenu(
@@ -1505,6 +2293,424 @@ public class MediQueueApp {
 
                 JOptionPane.showMessageDialog(
                         null, "No se pudo eliminar el usuario.");
+            }
+        }
+    }
+
+    /**
+     * Menu de consultas y operaciones del Arbol Binario de Busqueda.
+     * Permite utilizar el indice ABB y consultar las estructuras existentes.
+     */
+    private static void consultarBusquedasABB() {
+
+        // Actualiza el gestor con los datos actuales del sistema.
+        gestorBusquedas.cargarDatos(
+                gestorPacientes.getPrimerPaciente(),
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
+
+        boolean continuar = true;
+
+        while (continuar) {
+
+            String opcion = JOptionPane.showInputDialog(
+                    null,
+                    "CONSULTAS Y OPERACIONES MEDIANTE ABB\n\n"
+                    + "1. Buscar paciente por identificacion\n"
+                    + "2. Buscar tiquete por ID\n"
+                    + "3. Consultar historial por identificacion\n"
+                    + "4. Buscar atenciones por medico\n"
+                    + "5. Buscar atenciones por fecha\n"
+                    + "6. Buscar atenciones por sala/consultorio\n"
+                    + "7. Recorrido inorden\n"
+                    + "8. Recorrido preorden\n"
+                    + "9. Recorrido postorden\n"
+                    + "10. Contar nodos\n"
+                    + "11. Consultar altura del arbol\n"
+                    + "12. Mostrar pacientes por nivel\n"
+                    + "13. Validar estructura ABB\n\n"
+                    + "0. Regresar al menu principal",
+                    "Arbol Binario de Busqueda",
+                    JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            String dato;
+            String resultado;
+            Paciente paciente;
+            Tiquete tiquete;
+
+            switch (opcion.trim()) {
+
+                case "1":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la identificacion del paciente:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+
+                    paciente = gestorBusquedas.buscarPaciente(dato.trim());
+                    if (paciente == null) {
+                        resultado = "No se encontro un paciente con esa identificacion.";
+                    } else {
+                        resultado = "PACIENTE ENCONTRADO MEDIANTE ABB\n\n"
+                                + paciente.toString();
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Busqueda de paciente", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "2":
+                    dato = JOptionPane.showInputDialog(null, "Ingrese el ID del tiquete:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+
+                    tiquete = gestorBusquedas.buscarTiquete(dato.trim());
+                    if (tiquete == null) {
+                        resultado = "No se encontro un tiquete con ese ID.";
+                    } else {
+                        resultado = "TIQUETE ENCONTRADO\n\n" + tiquete.toString();
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Busqueda de tiquete", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "3":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la identificacion del paciente:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.consultarHistorial(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Historial del paciente", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "4":
+                    dato = JOptionPane.showInputDialog(null, "Ingrese el nombre del medico:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorMedico(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por medico", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "5":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese la fecha o parte de ella (AAAA-MM-DD):");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorFecha(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por fecha", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "6":
+                    dato = JOptionPane.showInputDialog(
+                            null, "Ingrese el nombre de la sala o consultorio:");
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    resultado = gestorBusquedas.buscarPorEspacio(dato.trim());
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Atenciones por espacio", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "7":
+                    resultado = gestorBusquedas.listarPacientesInorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido inorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "8":
+                    resultado = gestorBusquedas.listarPacientesPreorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido preorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "9":
+                    resultado = gestorBusquedas.listarPacientesPostorden();
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Recorrido postorden", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "10":
+                    JOptionPane.showMessageDialog(null,
+                            "Cantidad de nodos almacenados: "
+                            + gestorBusquedas.contarNodos(),
+                            "Conteo de nodos", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "11":
+                    JOptionPane.showMessageDialog(null,
+                            "Altura del arbol: " + gestorBusquedas.obtenerAltura()
+                            + "\n\nUn arbol vacio tiene altura -1.",
+                            "Altura del ABB", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                case "12":
+                    if (gestorBusquedas.contarNodos() == 0) {
+                        JOptionPane.showMessageDialog(null, "El arbol esta vacio.");
+                        break;
+                    }
+                    dato = JOptionPane.showInputDialog(null,
+                            "Ingrese el nivel que desea consultar.\n"
+                            + "La raiz se encuentra en el nivel 0.\n"
+                            + "Altura actual: " + gestorBusquedas.obtenerAltura());
+                    if (dato == null || dato.trim().isEmpty()) break;
+                    try {
+                        int nivel = Integer.parseInt(dato.trim());
+                        if (nivel < 0 || nivel > gestorBusquedas.obtenerAltura()) {
+                            JOptionPane.showMessageDialog(null,
+                                    "Ingrese un nivel entre 0 y "
+                                    + gestorBusquedas.obtenerAltura());
+                            break;
+                        }
+                        resultado = gestorBusquedas.mostrarNivel(nivel);
+                        JOptionPane.showMessageDialog(null, resultado,
+                                "Pacientes por nivel", JOptionPane.INFORMATION_MESSAGE);
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(null,
+                                "Debe ingresar un numero entero.");
+                    }
+                    break;
+
+                case "13":
+                    if (gestorBusquedas.validarArbolABB()) {
+                        resultado = "El arbol cumple las reglas de un "
+                                + "Arbol Binario de Busqueda (ABB).";
+                    } else {
+                        resultado = "El arbol no cumple las reglas de un ABB.";
+                    }
+                    JOptionPane.showMessageDialog(null, resultado,
+                            "Validacion del ABB", JOptionPane.INFORMATION_MESSAGE);
+                    break;
+
+                default:
+                    JOptionPane.showMessageDialog(null, "Seleccione una opcion valida.");
+                    break;
+            }
+        }
+    }
+
+    // =========================================================================
+    // NUEVOS SUBMENÚS DE INTEGRACIÓN A GESTORES AVANZADOS
+    // =========================================================================
+
+    // Integración Módulo 1.5 - Grafos de Sedes
+    private static void menuGrafosSedes() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTIÓN DE SEDES Y RUTAS (GRAFOS) ---\n\n"
+                    + "1. Registrar nueva sede\n"
+                    + "2. Agregar conexión (ruta entre sedes)\n"
+                    + "3. Ver el grafo completo de sedes\n"
+                    + "4. Buscar ruta óptima (Algoritmo de Dijkstra)\n"
+                    + "5. Guardar grafo en archivo JSON\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Módulo de Grafos", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                switch (opcion.trim()) {
+                    case "1":
+                        String id = JOptionPane.showInputDialog("ID de la sede (ej. S1):");
+                        String nombre = JOptionPane.showInputDialog("Nombre de la sede:");
+                        String[] tipos = {"Hospital", "Clinica", "EBAIS"};
+                        String tipo = (String) JOptionPane.showInputDialog(null, "Seleccione el tipo:", 
+                                "Tipo", JOptionPane.QUESTION_MESSAGE, null, tipos, tipos[0]);
+                        
+                        if (id != null && nombre != null && tipo != null) {
+                            grafoSedes.agregarSede(new Sede(id, nombre, tipo));
+                            persistenciaGrafo.guardar(grafoSedes);
+                            JOptionPane.showMessageDialog(null, "Sede agregada correctamente.");
+                        }
+                        break;
+                    case "2":
+                        String origen = JOptionPane.showInputDialog("ID de la sede ORIGEN:");
+                        String destino = JOptionPane.showInputDialog("ID de la sede DESTINO:");
+                        double distancia = Double.parseDouble(JOptionPane.showInputDialog("Distancia:"));
+                        double tiempo = Double.parseDouble(JOptionPane.showInputDialog("Tiempo:"));
+                        double costo = Double.parseDouble(JOptionPane.showInputDialog("Costo:"));
+                        
+                        grafoSedes.agregarConexion(origen, destino, distancia, tiempo, costo);
+                        persistenciaGrafo.guardar(grafoSedes);
+                        JOptionPane.showMessageDialog(null, "Conexión creada correctamente.");
+                        break;
+                    case "3":
+                        JOptionPane.showMessageDialog(null, grafoSedes.mostrarGrafo(), "Grafo de Sedes", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "4":
+                        String o = JOptionPane.showInputDialog("ID de la sede ORIGEN:");
+                        String d = JOptionPane.showInputDialog("ID de la sede DESTINO:");
+                        String[] criterios = {"DISTANCIA", "TIEMPO", "COSTO"};
+                        String criterio = (String) JOptionPane.showInputDialog(null, "Criterio de búsqueda:", 
+                                "Dijkstra", JOptionPane.QUESTION_MESSAGE, null, criterios, criterios[0]);
+                        
+                        if (o != null && d != null && criterio != null) {
+                            String ruta = grafoSedes.dijkstra(o, d, criterio);
+                            JOptionPane.showMessageDialog(null, ruta, "Ruta Óptima", JOptionPane.INFORMATION_MESSAGE);
+                        }
+                        break;
+                    case "5":
+                        persistenciaGrafo.guardar(grafoSedes);
+                        JOptionPane.showMessageDialog(null, "Grafo guardado en JSON con éxito.");
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Integración - Gestor de Atenciones Avanzado (con OpenFDA)
+    private static void menuGestorAtencionesAvanzado() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTOR DE ATENCIONES (AVANZADO API FDA) ---\n\n"
+                    + "1. Registrar nueva atención\n"
+                    + "2. Finalizar atención y validar medicamento (API OpenFDA)\n"
+                    + "3. Cancelar atención\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Gestor Atenciones", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                switch (opcion.trim()) {
+                    case "1":
+                        String idTiquete = JOptionPane.showInputDialog("Ingrese el ID del tiquete:");
+                        Tiquete tiquete = buscarTiquetePorId(idTiquete);
+                        if (tiquete != null) {
+                            String medico = JOptionPane.showInputDialog("Médico Asignado:");
+                            String espacio = JOptionPane.showInputDialog("Espacio Asignado:");
+                            gestorAtencionesAvanzado.registrarNuevaAtencion(tiquete, medico, espacio);
+                            // Actualiza la referencia principal por si esta fue la primera atención.
+                            primerAtencion = gestorAtencionesAvanzado.getPrimero();
+                            Atencion atencionRegistrada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(tiquete.getId());
+                            registrarMovimientoHistorialAvanzado(atencionRegistrada, Atencion.EN_ATENCION);
+                            if (!guardarAtencionesPersistentes()) {
+                                JOptionPane.showMessageDialog(null,
+                                        "La atención quedó registrada en memoria, pero no se pudo guardar atendidos.json.");
+                            }
+                            JOptionPane.showMessageDialog(null, "Atención registrada mediante el Gestor Avanzado.");
+                        } else {
+                            JOptionPane.showMessageDialog(null, "Tiquete no encontrado.");
+                        }
+                        break;
+                    case "2":
+                        String idTq = JOptionPane.showInputDialog("Ingrese el ID del tiquete de la atención activa:");
+                        String diag = JOptionPane.showInputDialog("Diagnóstico:");
+                        String med = JOptionPane.showInputDialog("Nombre del Medicamento a buscar en FDA (ej. Aspirin):");
+                        String obs = JOptionPane.showInputDialog("Observaciones:");
+                        String proc = JOptionPane.showInputDialog("Procedimientos:");
+                        
+                        JOptionPane.showMessageDialog(null, "Consultando a la FDA, por favor espere...");
+                        gestorAtencionesAvanzado.finalizarAtencion(idTq, diag, med, obs, proc);
+                        Atencion atencionFinalizada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(idTq);
+                        registrarMovimientoHistorialAvanzado(atencionFinalizada, Atencion.FINALIZADA);
+                        if (!guardarAtencionesPersistentes()) {
+                            throw new IllegalStateException("No se pudo guardar atendidos.json.");
+                        }
+                        JOptionPane.showMessageDialog(null, "Atención finalizada. Medicamento validado y guardado.");
+                        break;
+                    case "3":
+                        String idCanc = JOptionPane.showInputDialog("Ingrese el ID del tiquete a cancelar:");
+                        gestorAtencionesAvanzado.cancelarAtencion(idCanc);
+                        Atencion atencionCancelada = gestorAtencionesAvanzado.buscarAtencionPorTiquete(idCanc);
+                        registrarMovimientoHistorialAvanzado(atencionCancelada, Atencion.CANCELADA);
+                        if (!guardarAtencionesPersistentes()) {
+                            throw new IllegalStateException("No se pudo guardar atendidos.json.");
+                        }
+                        JOptionPane.showMessageDialog(null, "Atención cancelada.");
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    // Registra en la pila clínica los cambios realizados desde el gestor avanzado.
+    private static void registrarMovimientoHistorialAvanzado(Atencion atencion, String estado) {
+        if (atencion == null) {
+            throw new IllegalStateException("No se encontró la atención para actualizar el historial clínico.");
+        }
+
+        gestorHistorialAvanzado.registrarMovimientoEnHistorial(atencion, estado);
+        primerHistorial = gestorHistorialAvanzado.getInicioHistoriales();
+
+        if (!guardarHistorialPersistente()) {
+            throw new IllegalStateException("No se pudo guardar historial.json.");
+        }
+
+        // Actualiza el índice de búsquedas con la lista de historiales vigente.
+        gestorBusquedas.cargarDatos(
+                gestorPacientes.getPrimerPaciente(),
+                primerTiquete,
+                primerAtencion,
+                primerHistorial);
+    }
+
+    // Integración - Gestor de Historial Clínico Avanzado (Pilas)
+    private static void menuGestorHistorialAvanzado() {
+        boolean continuar = true;
+        while (continuar) {
+            String opcion = JOptionPane.showInputDialog(null,
+                    "--- GESTOR DE HISTORIAL CLÍNICO (PILAS) ---\n\n"
+                    + "1. Ver últimos N registros del paciente\n"
+                    + "2. Ver historial completo del paciente\n"
+                    + "3. Exportar historial físico (TXT)\n"
+                    + "4. Verificar si paciente puede reingresar a salón\n"
+                    + "0. Volver al menú principal\n\n"
+                    + "Seleccione una opción:",
+                    "Gestor Historial", JOptionPane.QUESTION_MESSAGE);
+
+            if (opcion == null || opcion.trim().equals("0")) {
+                continuar = false;
+                continue;
+            }
+
+            try {
+                String idPac;
+                switch (opcion.trim()) {
+                    case "1":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        int n = Integer.parseInt(JOptionPane.showInputDialog("¿Cuántos registros recientes desea ver?"));
+                        String ultimos = gestorHistorialAvanzado.mostrarUltimosRegistros(idPac, n);
+                        JOptionPane.showMessageDialog(null, ultimos, "Últimos Registros", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "2":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        String completo = gestorHistorialAvanzado.obtenerHistorialCompleto(idPac);
+                        JOptionPane.showMessageDialog(null, completo, "Historial Completo", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    case "3":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente para exportar:");
+                        gestorHistorialAvanzado.exportarHistorialFisico(idPac);
+                        JOptionPane.showMessageDialog(null, "Historial exportado correctamente.");
+                        break;
+                    case "4":
+                        idPac = JOptionPane.showInputDialog("Identificación del paciente:");
+                        boolean puede = gestorHistorialAvanzado.puedeReingresarASalon(idPac);
+                        JOptionPane.showMessageDialog(null, puede ? "El paciente SÍ puede reingresar." : "El paciente NO puede reingresar.", 
+                                "Verificación de Reingreso", JOptionPane.INFORMATION_MESSAGE);
+                        break;
+                    default:
+                        JOptionPane.showMessageDialog(null, "Opción no válida.");
+                }
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }

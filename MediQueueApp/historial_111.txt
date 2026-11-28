@@ -1,0 +1,12 @@
+HISTORIAL CLINICO COMPLETO
+Identificacion: 111
+
+Tiquete: T1 | Paciente: Jose N | Resultado: En atención
+Medico: Dr. Prueba
+Diagnostico: Infección respiratoria
+Medicamentos: Medicamento de prueba
+Observaciones: Paciente estable
+Procedimientos: Evaluación médica
+Espacio: Consultorio 1
+Costo: 15000.0
+

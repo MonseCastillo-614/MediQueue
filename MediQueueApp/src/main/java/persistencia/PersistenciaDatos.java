@@ -1,7 +1,6 @@
+
 package persistencia;
-import persistencia.LectorJson;
-import persistencia.JsonValor;
-import persistencia.AdaptadorJson;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -23,46 +22,19 @@ public final class PersistenciaDatos {
         this.carpetaDatos = carpetaDatos;
     }
 
-    // Carga el archivo de configuracion como texto JSON
+    // ================= CONFIGURACION =================
+
+    // Carga la configuracion como texto JSON.
     public String cargarConfiguracion() throws IOException {
         return leer("config.json");
     }
 
-    // Guarda la configuracion como texto JSON
-    public void guardarConfiguracion(String json)
-            throws IOException {
-
+    // Guarda la configuracion como texto JSON.
+    public void guardarConfiguracion(String json) throws IOException {
         escribir("config.json", json);
     }
 
-    // Carga el archivo de pacientes como texto JSON
-    public String cargarPacientes() throws IOException {
-        return leer("pacientes.json");
-    }
-
-    // Guarda los pacientes como texto JSON
-    public void guardarPacientes(String json) throws IOException {
-        escribir("pacientes.json", json);
-    }
-
-    // Elimina el archivo de pacientes durante el reinicio del sistema
-    public void eliminarPacientes() throws IOException {
-        Files.deleteIfExists(carpetaDatos.resolve("pacientes.json"));
-    }
-
-    // Carga el archivo de tiquetes como texto JSON
-    public String cargarTiquetes() throws IOException {
-        return leer("tiquetes.json");
-    }
-
-    // Guarda los tiquetes como texto JSON
-    public void guardarTiquetes(String json)
-            throws IOException {
-
-        escribir("tiquetes.json", json);
-    }
-
-    // Carga los datos de configuracion mediante un adaptador
+    // Carga la configuracion mediante un adaptador.
     public <T> T cargarConfiguracion(
             AdaptadorJson<T> adaptador) throws IOException {
 
@@ -72,16 +44,32 @@ public final class PersistenciaDatos {
                 "config.json");
     }
 
-    // Guarda los datos de configuracion mediante un adaptador
+    // Guarda la configuracion mediante un adaptador.
     public <T> void guardarConfiguracion(
             T configuracion,
             AdaptadorJson<T> adaptador) throws IOException {
 
-        guardarConfiguracion(
-                convertir(configuracion, adaptador));
+        guardarConfiguracion(convertir(configuracion, adaptador));
     }
 
-    // Carga los pacientes mediante un adaptador
+    // ================= PACIENTES =================
+
+    // Carga los pacientes como texto JSON.
+    public String cargarPacientes() throws IOException {
+        return leer("pacientes.json");
+    }
+
+    // Guarda los pacientes como texto JSON.
+    public void guardarPacientes(String json) throws IOException {
+        escribir("pacientes.json", json);
+    }
+
+    // Elimina el archivo de pacientes.
+    public void eliminarPacientes() throws IOException {
+        Files.deleteIfExists(carpetaDatos.resolve("pacientes.json"));
+    }
+
+    // Carga los pacientes mediante un adaptador.
     public <T> T cargarPacientes(
             AdaptadorJson<T> adaptador) throws IOException {
 
@@ -91,7 +79,7 @@ public final class PersistenciaDatos {
                 "pacientes.json");
     }
 
-    // Guarda los pacientes mediante un adaptador
+    // Guarda los pacientes mediante un adaptador.
     public <T> void guardarPacientes(
             T pacientes,
             AdaptadorJson<T> adaptador) throws IOException {
@@ -99,7 +87,19 @@ public final class PersistenciaDatos {
         guardarPacientes(convertir(pacientes, adaptador));
     }
 
-    // Carga los tiquetes mediante un adaptador
+    // ================= TIQUETES =================
+
+    // Carga los tiquetes como texto JSON.
+    public String cargarTiquetes() throws IOException {
+        return leer("tiquetes.json");
+    }
+
+    // Guarda los tiquetes como texto JSON.
+    public void guardarTiquetes(String json) throws IOException {
+        escribir("tiquetes.json", json);
+    }
+
+    // Carga los tiquetes mediante un adaptador.
     public <T> T cargarTiquetes(
             AdaptadorJson<T> adaptador) throws IOException {
 
@@ -109,18 +109,132 @@ public final class PersistenciaDatos {
                 "tiquetes.json");
     }
 
-    // Guarda los tiquetes mediante un adaptador
+    // Guarda los tiquetes mediante un adaptador.
     public <T> void guardarTiquetes(
             T pendientes,
             AdaptadorJson<T> adaptador) throws IOException {
 
-        guardarTiquetes(
-                convertir(pendientes, adaptador));
+        guardarTiquetes(convertir(pendientes, adaptador));
     }
 
-    // Lee un archivo existente y valida su contenido
-    private String leer(String nombreArchivo)
-            throws IOException {
+    // ================= ATENCIONES =================
+
+    // Carga las atenciones como texto JSON.
+    public String cargarAtenciones() throws IOException {
+        return leer("atendidos.json");
+    }
+
+    // Guarda las atenciones como texto JSON.
+    public void guardarAtenciones(String json) throws IOException {
+        escribir("atendidos.json", json);
+    }
+
+    // Carga las atenciones mediante un adaptador.
+    public <T> T cargarAtenciones(
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        return reconstruir(
+                cargarAtenciones(),
+                adaptador,
+                "atendidos.json");
+    }
+
+    // Guarda las atenciones mediante un adaptador.
+    public <T> void guardarAtenciones(
+            T atenciones,
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        guardarAtenciones(convertir(atenciones, adaptador));
+    }
+
+    // ================= HISTORIAL =================
+
+    // Carga el historial como texto JSON.
+    public String cargarHistorial() throws IOException {
+        return leer("historial.json");
+    }
+
+    // Guarda el historial como texto JSON.
+    public void guardarHistorial(String json) throws IOException {
+        escribir("historial.json", json);
+    }
+
+    // Carga el historial mediante un adaptador.
+    public <T> T cargarHistorial(
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        return reconstruir(
+                cargarHistorial(),
+                adaptador,
+                "historial.json");
+    }
+
+    // Guarda el historial mediante un adaptador.
+    public <T> void guardarHistorial(
+            T historial,
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        guardarHistorial(convertir(historial, adaptador));
+    }
+
+    // ================= SALAS =================
+
+    // Carga las salas como texto JSON.
+    public String cargarSalas() throws IOException {
+        return leer("salas.json");
+    }
+
+    // Guarda las salas como texto JSON.
+    public void guardarSalas(String json) throws IOException {
+        escribir("salas.json", json);
+    }
+
+    // Carga las salas mediante un adaptador.
+    public <T> T cargarSalas(
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        return reconstruir(
+                cargarSalas(),
+                adaptador,
+                "salas.json");
+    }
+
+    // Guarda las salas mediante un adaptador.
+    public <T> void guardarSalas(
+            T salas,
+            AdaptadorJson<T> adaptador) throws IOException {
+
+        guardarSalas(convertir(salas, adaptador));
+    }
+// ================= GRAFO DE SEDES =================
+
+public String cargarGrafo() throws IOException {
+    return leer("grafo.json");
+}
+
+public void guardarGrafo(String json) throws IOException {
+    escribir("grafo.json", json);
+}
+
+public <T> T cargarGrafo(
+        AdaptadorJson<T> adaptador) throws IOException {
+
+    return reconstruir(
+            cargarGrafo(),
+            adaptador,
+            "grafo.json");
+}
+
+public <T> void guardarGrafo(
+        T grafo,
+        AdaptadorJson<T> adaptador) throws IOException {
+
+    guardarGrafo(convertir(grafo, adaptador));
+}
+    // ================= LECTURA Y ESCRITURA =================
+
+    // Lee un archivo existente y valida su contenido.
+    private String leer(String nombreArchivo) throws IOException {
 
         Path archivo = carpetaDatos.resolve(nombreArchivo);
 
@@ -143,7 +257,7 @@ public final class PersistenciaDatos {
         return contenido;
     }
 
-    // Escribe el archivo usando un archivo temporal
+    // Escribe el archivo utilizando un archivo temporal.
     private void escribir(
             String nombreArchivo,
             String contenido) throws IOException {
@@ -195,7 +309,9 @@ public final class PersistenciaDatos {
         }
     }
 
-    // Valida que el contenido sea un objeto JSON correcto
+    // ================= VALIDACION JSON =================
+
+    // Comprueba que el contenido sea un objeto JSON válido.
     private static void validarJson(
             String json,
             String nombreArchivo) throws IOException {
@@ -223,7 +339,9 @@ public final class PersistenciaDatos {
         }
     }
 
-    // Convierte los datos a JSON mediante el adaptador
+    // ================= CONVERSION JSON =================
+
+    // Convierte los datos a JSON mediante un adaptador.
     private static <T> String convertir(
             T datos,
             AdaptadorJson<T> adaptador) throws IOException {
@@ -246,7 +364,7 @@ public final class PersistenciaDatos {
         }
     }
 
-    // Reconstruye los datos desde JSON mediante el adaptador
+    // Reconstruye los datos desde JSON mediante un adaptador.
     private static <T> T reconstruir(
             String json,
             AdaptadorJson<T> adaptador,

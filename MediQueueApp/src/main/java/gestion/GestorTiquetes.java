@@ -3,12 +3,9 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package gestion;
-
 import estructuras.NodoTiquete;
 import estructuras.ColaPrioridad;
 import modelo.Tiquete;
-import modelo.Paciente;
-
 /**
  * 
  * 
@@ -35,33 +32,8 @@ public class GestorTiquetes {
         cantidadAtendidos = 0;
     }
 
-    // Registra un paciente nuevo y genera su tiquete.
-    public Tiquete registrarPaciente(String identificacion, String nombre,
-            int edad, String tipoSeguro, String prioridad,
-            String tipoAtencion, String atencion) {
-
-        Paciente paciente = new Paciente(identificacion, nombre, edad, tipoSeguro);
-
-        if (tienePendiente(paciente.getIdentificacion())) {
-            throw new IllegalStateException(
-                    "El paciente " + paciente.getIdentificacion()
-                    + " ya tiene un tiquete pendiente.");
-        }
-
-        // Se crea primero con un ID temporal para obtener los valores normalizados.
-        Tiquete temporal = new Tiquete("TMP", paciente, prioridad,
-                tipoAtencion, atencion);
-
-        String id = siguienteId(temporal.getTipoAtencion());
-
-        Tiquete tiquete = new Tiquete(id, paciente,
-                temporal.getFechaHoraIngreso(), Tiquete.SIN_ATENDER,
-                temporal.getPrioridad(), temporal.getTipoAtencion(),
-                temporal.getAtencion());
-
-        colaPara(tiquete.getTipoAtencion()).encolar(tiquete);
-        return tiquete;
-    }
+    // Este gestor no registra ni crea pacientes.
+    // Recibe objetos Tiquete que ya están asociados al Paciente registrado.
 
     // Agrega un tiquete pendiente, por ejemplo, al cargar el archivo JSON.
     public void agregarTiquete(Tiquete tiquete) {
@@ -105,6 +77,41 @@ public class GestorTiquetes {
         tiquete.registrarAtencion();
         agregarAtendido(tiquete);
         return tiquete;
+    }
+
+    // Retira un tiquete de las colas usando solamente los metodos
+    // que ya existen en ColaPrioridad: tamano, desencolar y encolar.
+    public boolean removerTiquete(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            return false;
+        }
+
+        boolean removido = removerDeCola(consultas, id.trim());
+        if (removido) return true;
+
+        removido = removerDeCola(salas, id.trim());
+        if (removido) return true;
+
+        return removerDeCola(emergencias, id.trim());
+    }
+
+    // Recorre la cola una vez. Los tiquetes que no coinciden se vuelven
+    // a encolar en el mismo orden de prioridad.
+    private boolean removerDeCola(ColaPrioridad cola, String id) {
+        boolean removido = false;
+        int cantidadInicial = cola.tamano();
+
+        for (int i = 0; i < cantidadInicial; i++) {
+            Tiquete actual = cola.desencolar();
+
+            if (!removido && actual.getId().equalsIgnoreCase(id)) {
+                removido = true;
+            } else {
+                cola.encolar(actual);
+            }
+        }
+
+        return removido;
     }
 
     // Muestra el siguiente tiquete sin quitarlo de la cola.
